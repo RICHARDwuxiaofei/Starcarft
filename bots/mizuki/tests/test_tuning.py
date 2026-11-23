@@ -151,6 +151,9 @@ def test_first_macro_frame_runs_without_wall_geometry_and_queues_worker():
     agent = SimpleNamespace(
         time=0,
         minerals=50,
+        supply_workers=12,
+        _natural_retry_at=0,
+        _protected_support=lambda *_: None,
         supply_left=3,
         supply_used=12,
         supply_cap=15,
@@ -178,3 +181,160 @@ def test_first_macro_frame_runs_without_wall_geometry_and_queues_worker():
     assert train.call_args.args[0] is hall
     assert train.call_args.args[1] is U.SCV
     assert build.await_args.args[0] is U.SUPPLYDEPOT
+
+
+def test_gas_workers_entering_refinery_do_not_trigger_false_cloak_alert():
+    near = point(5, 1)
+    hall = SimpleNamespace(position=point(0, 0))
+    gas = SimpleNamespace(position=near, tag=99)
+    agent = SimpleNamespace(
+        time=68,
+        workers=[],
+        gas_buildings=[gas],
+        _worker_sightings={1: (45, point(8, 2)), 2: (45, point(3, 1))},
+        _gas_worker_sightings={1},
+        _unexplained_hits=[],
+    )
+    assert CompetitiveBot._missing_worker_contact(agent, [], [hall], False) is None
+    assert agent._unexplained_hits == []
+
+
+def test_opening_reserve_persists_past_old_cutoff_and_drops_under_real_pressure():
+    from dataclasses import replace
+
+    from bots.mizuki.policy import desired_refineries, protect_natural
+
+    row = Signals(186, 1, 3, 0, 0, 0, False)
+    assert protect_natural(row, barracks_ready=True, pending=False)
+    assert protect_natural(replace(row, time=270), barracks_ready=True, pending=False)
+    assert not protect_natural(
+        replace(row, local_pressure=5), barracks_ready=True, pending=False
+    )
+    assert not protect_natural(row, barracks_ready=True, pending=True)
+    assert not protect_natural(row, barracks_ready=True, pending=False, retry_ok=False)
+    assert desired_refineries(1, 50, factory_ready=True) == 1
+    assert desired_refineries(2, 532, factory_ready=True) == 1
+    assert desired_refineries(2, 100, factory_ready=True) == 2
+
+
+@pytest.mark.parametrize(
+    ("money", "bases", "candidate", "expected_mode", "first_action"),
+    [
+        (325, 1, None, "bank_natural", None),
+        (400, 1, None, "normal", "expand"),
+        (100, 2, U.SIEGETANK, "bank_siegetank", None),
+        (150, 2, U.SIEGETANK, "normal", "train_SIEGETANK"),
+    ],
+)
+def test_macro_spends_on_expansion_or_first_tank_before_optional_army(
+    money, bases, candidate, expected_mode, first_action
+):
+    class Group(list):
+        ready = property(lambda self: self)
+        amount = property(len)
+
+    home = point(16, 15)
+    hall = SimpleNamespace(
+        tag=99, position=home, is_idle=True, type_id=U.ORBITALCOMMAND
+    )
+    events = []
+    army = AsyncMock(side_effect=lambda *_: events.append("army"))
+    tech = AsyncMock(side_effect=lambda *_: events.append("tech"))
+    expand = AsyncMock(side_effect=lambda *_: (events.append("expand"), True)[1])
+    factory = SimpleNamespace(tag=3)
+    f = SimpleNamespace(
+        time=186,
+        minerals=money,
+        vespene=300,
+        supply_workers=22,
+        supply_left=10,
+        supply_used=33,
+        supply_cap=43,
+        workers=Group([object()]),
+        townhalls=Group([hall]),
+        _anchors=lambda: (None, None, None),
+        structures=lambda t: Group([object()]) if t == U.BARRACKS else Group(),
+        _working_refineries=lambda: 1,
+        start_location=home,
+        game_info=SimpleNamespace(map_center=point(48, 48)),
+        unit_tags_received_action=set(),
+        _queued_upgrades=set(),
+        _last_macro_mode=None,
+        _pending=lambda _: 0,
+        _plan_total=lambda t: int(t == U.BARRACKS),
+        _expand=expand,
+        _next_build={},
+        _natural_retry_at=0,
+        _protected_support=lambda *_: (candidate, factory) if candidate else None,
+        can_afford=lambda t: money >= (400 if t == U.COMMANDCENTER else 150),
+        _train=lambda _, unit, __: (events.append(f"train_{unit.name}"), True)[1],
+        _build=AsyncMock(),
+        _gas=AsyncMock(),
+        _tech=tech,
+        _addons_and_army=army,
+        _trace_intent=Mock(),
+        _resume_construction=Mock(),
+        _staff_refineries=Mock(),
+        _repair=Mock(),
+    )
+    s = Signals(186, bases, 7, 0, 0, 0, False)
+    asyncio.run(CompetitiveBot._macro(f, s))
+    assert f._last_macro_mode == expected_mode
+    if first_action:
+        assert events[0] == first_action
+    else:
+        assert not events
+        tech.assert_not_awaited()
+        army.assert_not_awaited()
+
+
+def test_ready_factory_tech_lab_has_priority_over_first_starport():
+    class Group(list):
+        ready = property(lambda self: self)
+
+        def find_by_tag(self, tag):
+            return next((u for u in self if u.tag == tag), None)
+
+    factory = SimpleNamespace(is_idle=True, tag=1, add_on_tag=2)
+    lab = SimpleNamespace(tag=2)
+    structures = {U.FACTORY: Group([factory]), U.FACTORYTECHLAB: Group([lab])}
+    agent = SimpleNamespace(
+        time=260,
+        vespene=300,
+        _support_retry_at=0,
+        _pending=lambda _: 0,
+        structures=lambda u: structures.get(u, Group()),
+        units=lambda _: [],
+        _plan_total=lambda _: 0,
+        calculate_cost=lambda _: SimpleNamespace(vespene=125),
+        unit_tags_received_action=set(),
+    )
+    signals = Signals(260, 2, 12, 0, 0, 0, False)
+    assert CompetitiveBot._protected_support(agent, signals, 6) == (
+        U.SIEGETANK,
+        factory,
+    )
+    agent.units = lambda u: (
+        [object()] if isinstance(u, set) and U.SIEGETANK in u else []
+    )
+    assert CompetitiveBot._protected_support(agent, signals, 6) == (U.STARPORT, None)
+
+
+def test_surplus_gas_returns_idle_cargo_free_workers_to_local_minerals():
+    patch = Mock(tag=20, distance_to=lambda _: 1)
+    gather = Mock()
+    worker = SimpleNamespace(
+        tag=1, order_target=42, is_carrying_resource=False, gather=gather
+    )
+    agent = SimpleNamespace(
+        time=350,
+        _next_refinery_staff=0,
+        vespene=532,
+        minerals=40,
+        gas_buildings=SimpleNamespace(tags={42}),
+        workers=[worker],
+        unit_tags_received_action=set(),
+        mineral_field=SimpleNamespace(closer_than=lambda *_: [patch]),
+    )
+    CompetitiveBot._staff_refineries(agent)
+    gather.assert_called_once_with(patch)

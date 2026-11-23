@@ -58,3 +58,7 @@ py -3.12 -m bots.mizuki.smoke --map RedCityLE --race Terran --difficulty Medium 
 - 中立裁判的 Bot 注册信息：模块 `bots.mizuki.bot`、类 `CompetitiveBot`、种族 `Race.Terran`。从该分支的仓库根目录导入模块，不要把 `bot.py` 当无包名的单文件导入或直接执行。
 - GUI 打内置 AI 时，启动新的 Python 子进程运行 `-m bots.mizuki.smoke`。子进程工作目录设为本次对局所用 checkout 的根目录，传入该机的 `SC2PATH`，保留 stdout、stderr 与退出码。不要在 GUI 工作线程里直接调用 `run_game`；burnysc2 创建游戏进程时会注册主线程信号处理器。
 - 地图用不带扩展名的实际文件名（例如 `RedCityLE`），不要用游戏显示名代替。每局使用独立回放和 JSON 路径。启动器显示 `map_lookup` 是还没进入游戏，`engine_run` 是引擎运行阶段异常，`replay_write` 表示未生成新录像；都不要当成 Bot 打输。
+
+## RedCityLE 首场复盘后的运营修复
+
+Base98745 的六分钟局到时判平：Mizuki 回放没有二矿开工、没有 MULE、没有坦克，末段气体累积到 532。旧策略在固定时窗外一直允许低价兵和科技抢矿；气矿工人从原始观测暂时消失也可能被错当作矿线被偷袭。现在安全时持续留二矿预算，保留必要 SCV/人口与遇袭响应；开出二矿后，准备就绪的第一辆坦克、星港和第一架运输机有明确优先级。气矿进出不再被直接判作工人遇袭；气多矿少会撤一部分采气工人。以上为针对回放问题的回归修复，不是新版实战胜率结论。对打请保留同地图、相同种子和双方分支 SHA；建议交换出生点各跑至少一轮，并把时限拉到 12–15 分钟。

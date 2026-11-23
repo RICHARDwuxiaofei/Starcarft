@@ -89,7 +89,7 @@ def test_skips_blocked_expansion_tile_without_stalling():
         _blocked_expansions={},
         time=121,
         can_place_single=AsyncMock(side_effect=[False, True]),
-        _available_builder=lambda _: worker,
+        _candidate_builders=lambda _: [worker],
         unit_tags_received_action=set(),
         client=SimpleNamespace(query_pathing=AsyncMock(return_value=21)),
     )

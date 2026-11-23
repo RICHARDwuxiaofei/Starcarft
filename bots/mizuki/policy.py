@@ -48,3 +48,29 @@ def air_targets(s: Signals) -> tuple[int, int]:
     medivacs = min(7, max(2, int(s.army_supply // 16)))
     vikings = min(14, max(0, int(s.enemy_air * 0.85 + 0.5)))
     return medivacs, vikings
+
+
+def protect_natural(
+    s: Signals,
+    *,
+    barracks_ready: bool,
+    pending: bool,
+    opening_cover: float = 0,
+    retry_ok: bool = True,
+) -> bool:
+    """A safe one-base opening keeps a CC budget until it actually places one."""
+    return (
+        s.bases == 1
+        and s.time >= 104
+        and barracks_ready
+        and not pending
+        and retry_ok
+        and s.local_pressure < 5
+        and s.army_supply + opening_cover >= 2
+    )
+
+
+def desired_refineries(active_bases: int, gas_bank: int, *, factory_ready: bool) -> int:
+    if active_bases < 2 or not factory_ready or gas_bank >= 185:
+        return 1
+    return min(6, 2 if active_bases == 2 else 2 * active_bases - 2)

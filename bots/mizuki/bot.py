@@ -17,8 +17,10 @@ from .combat import control_combat
 from .policy import (
     Signals,
     air_targets,
+    desired_refineries,
     desired_workers,
     expansion_allowed,
+    protect_natural,
     supply_order_count,
 )
 from .trace import DecisionTrace
@@ -83,6 +85,8 @@ class CompetitiveBot(BotAI):
         ) = None
         self._reserved_addons: dict[Point2, float] = {}
         self._next_refinery_staff = 0.0
+        self._natural_retry_at = 0.0
+        self._support_retry_at = 0.0
         self._last_macro_mode: str | None = None
         self._scout_retreat_until = 0.0
         self._scout_tag: int | None = None
@@ -98,11 +102,16 @@ class CompetitiveBot(BotAI):
         self._scan_last = -99.0
         self._worker_sightings: dict[int, tuple[float, Point2]] = {}
         self._unexplained_hits: list[Contact] = []
+        self._gas_worker_sightings: set[int] = set()
         self._scan_contact: Contact | None = None
 
     async def on_start(self) -> None:
         self.client.game_step = 4
-        starts = sorted(self.enemy_start_locations, key=lambda p: (p.x, p.y))
+        home = self.start_location
+        starts = sorted(
+            (p for p in self.enemy_start_locations if p.distance_to(home) > 8),
+            key=lambda p: (p.distance_to(home), p.x, p.y),
+        )
         self._scout_route = starts.copy()
         for p in starts:
             candidates = [
@@ -166,7 +175,7 @@ class CompetitiveBot(BotAI):
             phase,
             minerals=self.minerals,
             gas=self.vespene,
-            workers=self.workers.amount,
+            workers=self.supply_workers,
             army_supply=self.supply_army,
             supply_used=self.supply_used,
             supply_cap=self.supply_cap,
@@ -283,11 +292,26 @@ class CompetitiveBot(BotAI):
         self, contacts: list[Unit], bases: list[Unit], detection: bool
     ) -> Contact | None:
         now = self.time
+        gas = tuple(getattr(self, "gas_buildings", ()))
+        gas_tags = {g.tag for g in gas}
+        prior_gassers = getattr(self, "_gas_worker_sightings", set())
         current = {w.tag: (w.health, w.position) for w in self.workers}
+        self._gas_worker_sightings = {
+            w.tag
+            for w in self.workers
+            if getattr(w, "order_target", None) in gas_tags
+            or getattr(w, "is_carrying_vespene", False)
+        }
         unexplained = [e for e in self._unexplained_hits if now - e.stamp <= 5]
         for tag, (health, old_position) in self._worker_sightings.items():
             latest = current.get(tag)
             if latest is not None and health - latest[0] < 12:
+                continue
+            if latest is None and (
+                tag in prior_gassers
+                or any(old_position.distance_to(g.position) <= 5 for g in gas)
+            ):
+                # Workers can disappear from raw observations while inside a refinery.
                 continue
             p = latest[1] if latest is not None else old_position
             if any(p.distance_to(b.position) < 13 for b in bases) and not any(
@@ -323,7 +347,7 @@ class CompetitiveBot(BotAI):
         ]
         if hidden:
             self._scan_contact = Contact(hidden[0].position, self.time)
-        elif damage:
+        elif damage and (self.time >= 120 or s.detection_risk):
             self._scan_contact = damage
             self._cloak_until = max(self._cloak_until, self.time + 35)
         if not orbitals:
@@ -405,24 +429,38 @@ class CompetitiveBot(BotAI):
             return True
         return False
 
-    def _available_builder(self, position: Point2) -> Unit | None:
+    def _candidate_builders(self, position: Point2) -> list[Unit]:
         candidates = [
             w
             for w in self.workers
             if w.tag not in self.unit_tags_received_action
             and (w.is_idle or w.is_collecting)
         ]
-        return min(
+        return sorted(
             candidates,
             key=lambda w: (w.distance_to(position) + (0 if w.is_idle else 2), w.tag),
-            default=None,
         )
+
+    def _available_builder(self, position: Point2) -> Unit | None:
+        return next(iter(CompetitiveBot._candidate_builders(self, position)), None)
 
     def _staff_refineries(self) -> None:
         if self.time < self._next_refinery_staff:
             return
         self._next_refinery_staff = self.time + 5
-        if self.vespene >= 175 and self.vespene > self.minerals * 0.8:
+        gas_tags = self.gas_buildings.tags
+        if self.vespene >= 225 and self.vespene > self.minerals * 0.9:
+            gassers = [
+                w
+                for w in self.workers
+                if w.order_target in gas_tags
+                and not w.is_carrying_resource
+                and w.tag not in self.unit_tags_received_action
+            ]
+            for w in sorted(gassers, key=lambda u: u.tag)[:2]:
+                patches = self.mineral_field.closer_than(14, w)
+                if patches:
+                    w.gather(min(patches, key=lambda m: (m.distance_to(w), m.tag)))
             return
         for gas in sorted(self.gas_buildings.ready, key=lambda u: u.tag):
             if gas.vespene_contents <= 0 or gas.surplus_harvesters >= 0:
@@ -433,7 +471,7 @@ class CompetitiveBot(BotAI):
                 if w.tag not in self.unit_tags_received_action
                 and not w.is_carrying_resource
                 and (w.is_idle or w.is_gathering)
-                and w.order_target not in self.gas_buildings.tags
+                and w.order_target not in gas_tags
             ]
             workers.sort(key=lambda w: (not w.is_idle, w.distance_to(gas), w.tag))
             for w in workers[: min(2, -gas.surplus_harvesters)]:
@@ -555,32 +593,96 @@ class CompetitiveBot(BotAI):
             self._pending(U.SUPPLYDEPOT),
             producers,
         )
-        if build_depot:
+        pending_cc = bool(self._pending(U.COMMANDCENTER))
+        # A lost main can be rebuilt even if its replacement has no supporting barracks.
+        recovering = s.bases == 0 and not pending_cc
+        bank_natural = protect_natural(
+            s,
+            barracks_ready=bool(rax.ready),
+            pending=pending_cc,
+            opening_cover=min(2, self._pending(U.MARINE)),
+            retry_ok=self.time >= self._natural_retry_at,
+        )
+        expanding = (
+            recovering
+            or bank_natural
+            or (s.bases >= 2 and expansion_allowed(s) and not pending_cc)
+        )
+        if (
+            expanding
+            and self.can_afford(U.COMMANDCENTER)
+            and self.time >= self._next_build.get(U.COMMANDCENTER, 0)
+        ):
+            self._next_build[U.COMMANDCENTER] = self.time + 3.0
+            started = await self._expand(townhalls)
+            if started:
+                bank_natural = False
+            elif s.bases <= 1:
+                # Bad terrain / occupied sites may delay a retry, not freeze production indefinitely.
+                self._natural_retry_at = self.time + 8.0
+                bank_natural = False
+                self._trace_intent(
+                    "expansion_wait_no_site",
+                    next_retry=round(self._natural_retry_at, 2),
+                )
+        emergency = s.local_pressure >= 5
+        if build_depot and (
+            not bank_natural or self.supply_left < 4 or not depots.ready
+        ):
             location = (
                 depot_anchor if not depots and depot_anchor is not None else interior
             )
             await self._build(U.SUPPLYDEPOT, location, radius=10)
         if depots.ready and not self._plan_total(U.BARRACKS):
-            await self._build(
-                U.BARRACKS,
-                rax_anchor or ramp or interior,
-                addon=True,
-            )
-        if rax and self.time >= 38 and (s.local_pressure < 5 or s.time > 230):
-            gas_target = (
-                1
-                if not self.structures(U.FACTORY)
-                else min(6, max(2, 2 * len(townhalls) - 1))
+            await self._build(U.BARRACKS, rax_anchor or ramp or interior, addon=True)
+
+        support = (
+            None
+            if bank_natural or emergency
+            else self._protected_support(s, supply["left"])
+        )
+        bank_support = False
+        if support:
+            item, producer = support
+            if self.can_afford(item):
+                sent = (
+                    (await self._build(item, interior, addon=True))
+                    if producer is None
+                    else self._train(producer, item, supply)
+                )
+                if sent:
+                    self._trace_intent("support_queued", item=item.name)
+                else:
+                    self._support_retry_at = self.time + 4
+                    self._trace_intent("support_attempt_failed", item=item.name)
+            else:
+                bank_support = True
+
+        factory_ready = bool(self.structures(U.FACTORY).ready)
+        if (
+            rax
+            and self.time >= 38
+            and not bank_natural
+            and not bank_support
+            and not emergency
+        ):
+            gas_target = desired_refineries(
+                len(townhalls), self.vespene, factory_ready=factory_ready
             )
             await self._gas(gas_target)
 
+        # Maintain worker production; Orbital conversions and discretionary spending
+        # cannot shave the last minerals off the funded one-base or first-support plan.
         for hall in townhalls:
             if not hall.is_idle or hall.tag in self.unit_tags_received_action:
                 continue
             if (
-                rax.ready
+                not bank_natural
+                and not bank_support
+                and not emergency
+                and rax.ready
                 and hall.type_id == U.COMMANDCENTER
-                and self.workers.amount >= 15
+                and self.supply_workers >= 15
                 and self.can_afford(U.ORBITALCOMMAND)
             ):
                 hall(
@@ -588,32 +690,19 @@ class CompetitiveBot(BotAI):
                     subtract_cost=True,
                     can_afford_check=True,
                 )
-            elif self.workers.amount + self._pending(U.SCV) < desired_workers(
+            elif self.supply_workers + self._pending(U.SCV) < desired_workers(
                 len(townhalls), self._working_refineries()
             ):
                 self._train(hall, U.SCV, supply)
 
-        expanding = expansion_allowed(s) and not self._pending(U.COMMANDCENTER)
-        if (
-            expanding
-            and self.can_afford(U.COMMANDCENTER)
-            and self.time >= self._next_build.get(U.COMMANDCENTER, 0)
-        ):
-            self._next_build[U.COMMANDCENTER] = self.time + 3.0
-            await self._expand(townhalls)
-        # Saving keeps the first command center from being starved by repeated 50-mineral orders.
-        # Break the reserve under pressure or while expansion tiles are failing.
-        bank_natural = (
-            s.bases == 1
-            and expanding
-            and 110 <= self.time < 175
-            and 5 <= self.supply_army < 16
-            and s.local_pressure < 3
-            and 185 <= self.minerals < self.calculate_cost(U.COMMANDCENTER).minerals
-        )
-        emergency = s.local_pressure >= 5
         mode = (
-            "emergency" if emergency else "bank_natural" if bank_natural else "normal"
+            "emergency"
+            if emergency
+            else "bank_natural"
+            if bank_natural
+            else f"bank_{support[0].name.lower()}"
+            if bank_support and support
+            else "normal"
         )
         if mode != self._last_macro_mode:
             self._trace_intent(
@@ -625,20 +714,18 @@ class CompetitiveBot(BotAI):
             )
             self._last_macro_mode = mode
         if emergency:
-            # Use established buildings before investing in new production under attack.
             await self._addons_and_army(s, supply, False)
             await self._tech(s, interior)
-        else:
-            if not bank_natural:
-                await self._tech(s, interior)
-            await self._addons_and_army(s, supply, bank_natural)
+        elif not bank_natural and not bank_support:
+            await self._tech(s, interior)
+            await self._addons_and_army(s, supply, False)
         if s.local_pressure < 4:
             self._resume_construction()
             self._staff_refineries()
         if s.local_pressure < 3 and self.time > 125:
             self._repair(townhalls)
 
-    async def _expand(self, halls: list[Unit]) -> None:
+    async def _expand(self, halls: list[Unit]) -> bool:
         occupied = [h.position for h in self.townhalls]
         origin = halls[0].position if halls else self.start_location
         sites = sorted(
@@ -650,22 +737,77 @@ class CompetitiveBot(BotAI):
                 continue
             if self._blocked_expansions.get(location, 0) > self.time:
                 continue
-            # Query placement before moving an SCV; a blocked site is not a reason to stall macro.
+            candidates = self._candidate_builders(location)[:3]
+            if not candidates:
+                return False
             if not await self.can_place_single(U.COMMANDCENTER, location):
                 self._blocked_expansions[location] = self.time + 22
-                continue
-            worker = self._available_builder(location)
-            if worker is None or worker.tag in self.unit_tags_received_action:
-                continue
-            if not await self.client.query_pathing(worker.position, location):
-                self._blocked_expansions[location] = self.time + 22
-                continue
-            if worker.build(U.COMMANDCENTER, location, can_afford_check=True):
                 if getattr(self, "_trace", None) is not None:
                     self._trace_intent(
-                        "expand_queued", x=round(location.x, 1), y=round(location.y, 1)
+                        "expand_site_rejected",
+                        reason="placement",
+                        x=location.x,
+                        y=location.y,
                     )
-                return
+                continue
+            for worker in candidates:
+                distance = await self.client.query_pathing(worker, location)
+                if distance is None and worker.distance_to(location) > 2.5:
+                    continue
+                if worker.build(U.COMMANDCENTER, location, can_afford_check=True):
+                    if getattr(self, "_trace", None) is not None:
+                        self._trace_intent(
+                            "expand_queued",
+                            x=round(location.x, 1),
+                            y=round(location.y, 1),
+                        )
+                    return True
+            self._blocked_expansions[location] = self.time + 8
+            if getattr(self, "_trace", None) is not None:
+                self._trace_intent(
+                    "expand_site_rejected",
+                    reason="no_builder_path_or_queue",
+                    x=location.x,
+                    y=location.y,
+                )
+        return False
+
+    def _protected_support(
+        self, s: Signals, supply: float
+    ) -> tuple[U, Unit | None] | None:
+        if self.time < self._support_retry_at or s.bases < 2 or s.army_supply < 4:
+            return None
+        factory = self.structures(U.FACTORY).ready
+        starport = self.structures(U.STARPORT).ready
+        existing_tank = bool(
+            self.units({U.SIEGETANK, U.SIEGETANKSIEGED})
+        ) or self._pending(U.SIEGETANK)
+        existing_med = bool(self.units(U.MEDIVAC)) or self._pending(U.MEDIVAC)
+
+        def gas_ready(kind: U) -> bool:
+            return self.vespene >= self.calculate_cost(kind).vespene
+
+        if not existing_tank and supply >= 3 and gas_ready(U.SIEGETANK):
+            for building in sorted(factory, key=lambda u: u.tag):
+                addon = self.structures(U.FACTORYTECHLAB).ready.find_by_tag(
+                    building.add_on_tag
+                )
+                if (
+                    building.is_idle
+                    and addon
+                    and building.tag not in self.unit_tags_received_action
+                ):
+                    return U.SIEGETANK, building
+        if factory and not self._plan_total(U.STARPORT) and gas_ready(U.STARPORT):
+            return U.STARPORT, None
+        if not existing_med and supply >= 2 and gas_ready(U.MEDIVAC):
+            for building in sorted(starport, key=lambda u: u.tag):
+                if (
+                    building.is_idle
+                    and building.tag not in self.unit_tags_received_action
+                ):
+                    return U.MEDIVAC, building
+        return None
 
     async def _tech(self, s: Signals, near: Point2) -> None:
         rax = self.structures(U.BARRACKS)
@@ -675,20 +817,31 @@ class CompetitiveBot(BotAI):
         rax_target = min(
             10, 1 if self.time < 115 else (3 if s.bases <= 2 else s.bases * 2)
         )
-        if s.local_pressure >= 5 and self.time < 190:
-            rax_target = max(2, rax_target)
+        if s.bases < 2 and self.time < 185:
+            rax_target = 2 if s.local_pressure >= 5 else 1
         fac_target = 2 if s.bases >= 3 and s.army_supply >= 35 else 1
         sp_target = 2 if s.bases >= 3 and (s.enemy_air >= 5 or self.time > 430) else 1
 
         readiness = (
-            (U.FACTORY, rax.ready and s.time >= 99, 1, True),
+            (
+                U.FACTORY,
+                rax.ready
+                and s.time >= 103
+                and (
+                    s.bases >= 2
+                    or s.time >= 184
+                    or (s.local_pressure >= 5 and s.army_supply >= 5)
+                ),
+                1,
+                True,
+            ),
             (U.STARPORT, fac.ready, 1, True),
             (U.BARRACKS, rax.ready, rax_target, True),
             (U.FACTORY, fac.ready, fac_target, True),
             (U.STARPORT, sp.ready, sp_target, True),
             (
                 U.ENGINEERINGBAY,
-                s.time >= 200 or s.detection_risk,
+                s.time >= 220 or (s.time >= 150 and s.detection_risk),
                 2 if s.time >= 325 and s.bases >= 3 else 1,
                 False,
             ),
@@ -703,6 +856,7 @@ class CompetitiveBot(BotAI):
                 return
         if (
             eb.ready
+            and s.time >= 150
             and (s.detection_risk or s.enemy_air >= 4)
             and not self._pending(U.MISSILETURRET)
         ):
@@ -788,7 +942,8 @@ class CompetitiveBot(BotAI):
                     if (
                         not building.add_on_tag
                         and not save
-                        and s.time > 95
+                        and s.time > 105
+                        and s.army_supply + self._pending(U.MARINE) >= 3
                         and s.local_pressure < 5
                     ):
                         ability = (
