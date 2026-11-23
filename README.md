@@ -42,3 +42,18 @@ $env:SC2PATH = 'C:\baoxue\StarCraft II'  # laptop: D:\baoxue\StarCraft II
 ## Git workflow
 
 Develop on local STUDIO. Push to GitHub to synchronize. Three independent Git worktrees have been created: `D:\CODE\Starcarft-agent-worktrees\codex` (`agent/codex-bot`), `D:\CODE\Starcarft-agent-worktrees\antigravity` (`agent/antigravity-bot`), `D:\CODE\Starcarft-agent-worktrees\other` (`agent/other-bot`). Each agent may edit only its own `bots/<agent>/` folder within its assigned worktree, and should use `D:\CODE\Starcarft\.venv\Scripts\python.exe` as the existing Python environment. The integration owner reviews and merges changes. Do not have multiple agents edit the same checkout at the same time. The existing test file `1` is preserved.
+
+
+## 本地 GUI 比赛启动器
+
+在 Windows 台式机 **STUDIO** 上双击仓库根目录的 `Start_Arena_GUI.bat`，或运行
+`.\.venv\Scripts\python.exe launcher\server.py`，浏览器打开
+**http://127.0.0.1:8765**。
+
+可选择 Codex / webGPT / mizuki / Gemini 等 Agent 的独立 Bot 脚本，对战另一个
+Bot、暴雪内置电脑或同机真人；可配置地图、种族、难度、随机种子和实时模式。
+GUI 提供环境/入口自检、比赛启动/停止、运行日志、JSON 结果与回放位置。
+
+**模型标签只表示作者，不调用在线 LLM API。** 代码发现范围是当前仓库与
+`D:\CODE\Starcarft-agent-worktrees` 的独立工作树，不会修改参赛 Bot。
+不支持跨机器好友联机或独立观战客户端。详细见 [启动器说明](launcher/README.md)。
