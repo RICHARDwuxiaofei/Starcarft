@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Sequence
 
 from sc2.bot_ai import BotAI
@@ -238,6 +239,29 @@ def classify_threat(
     if enemy_units_near_base >= 4 and own_army_supply < 15:
         return 2
     return 1
+
+
+def staging_point(base: Point2, enemy_start: Point2, distance: float = 10.0) -> Point2:
+    """主力集结/防守锚点：从基地朝对手方向前出 `distance` 格。
+
+    旧版直接把 `_home_point()` 当集结点，而它是自然矿指挥中心的**本体**
+    （5x5 不可通行建筑）。两场 Sol 6.2 录像里，主力在 GATHER 状态下被
+    `_rally` 收拢到分矿指挥中心旁边，首战死亡位置集中在建筑与矿脉之间的
+    1–2 格：8:16 局 6:31.2–6:34.2 有 14 个陆战队员死在 (44,26)/(44,27)
+    （分矿指挥中心 (42,24) 的边角），8:40 局 6:42.0–6:42.7 有 4 个死在
+    同一格 (22,122)。架起坦克的溅射与生化集火正好覆盖这团兵：两局首战
+    合计 42 个作战单位只换到 5 个陆战队员。
+
+    把锚点挪到基地与对手之间、离基地 `distance` 格的开阔处，部队才有
+    展开空间；距离在基地到对手一半以内，不会把主力送去对手家门口。
+    """
+    dx = enemy_start.x - base.x
+    dy = enemy_start.y - base.y
+    length = math.hypot(dx, dy)
+    if length <= 1e-6:
+        return Point2((base.x, base.y))
+    step = min(max(0.0, distance), length * 0.5)
+    return Point2((base.x + dx / length * step, base.y + dy / length * step))
 
 
 def needs_marauder(marines: int, marauders: int) -> bool:
@@ -659,6 +683,12 @@ class CompetitiveBot(BotAI):
     def _owns_position(self, position: Point2) -> bool:
         return any(th.distance_to(position) < 15 for th in self.townhalls)
 
+    def _staging_point(self) -> Point2:
+        """主力等待/防守的落点：基地朝对手方向前出，不落在基地建筑格上。"""
+        return staging_point(
+            self._home_point(), self.enemy_start_locations[0], distance=10.0
+        )
+
     def _owned_mineral_fields(self) -> int:
         if not self.townhalls:
             return 0
@@ -812,15 +842,26 @@ class CompetitiveBot(BotAI):
         if not self.townhalls:
             return
         pending = int(self.already_pending(UnitTypeId.SUPPLYDEPOT))
+        # 产能越宽，人口越快被吃满：按“每座可出兵建筑预留 2 人口”提前补站。
+        # 两场 Sol 录像在 6:25–6:26 都卡在 68–69/69 人口（快局还压着 1,140 矿），
+        # 首战打起来时连增援都排不进去；对面同期上限是 78。
+        production = (
+            self.structures(UnitTypeId.BARRACKS).ready.amount
+            + self.structures(UnitTypeId.FACTORY).ready.amount
+            + self.structures(UnitTypeId.STARPORT).ready.amount
+        )
+        reserved_supply = min(12.0, 2.0 * production)
+        # 存款多说明经济跑在产能前面，允许多排一座，避免下一次人口墙。
+        max_pending = 3 if self.minerals >= 300 else 2
         if (
             supply_depot_needed(
                 self.supply_used,
                 self.supply_cap,
                 pending,
+                reserved_supply=reserved_supply,
                 margin=4,
             )
-            # 一次最多两座，减少“人口墙”。
-            and pending < 2
+            and pending < max_pending
             and self.minerals >= 100
             and self.time - self._last_supply_build > 1.0
         ):
@@ -952,7 +993,13 @@ class CompetitiveBot(BotAI):
 
     async def _try_addon(self, building, addon: UnitTypeId) -> bool:
         """尝试给一栋生产建筑挂附件；返回 True 表示本帧已处理过附件。"""
-        if building.add_on_tag != 0 or not building.is_idle:
+        if building.add_on_tag != 0:
+            return False
+        # 生产中的建筑也要能排队挂附件：旧实现要求 `is_idle`，而两场 Sol 录像里
+        # 兵营几乎一直在训练，结果 8:16 局 4 座兵营全程 0 附件（没有兴奋剂/盾牌，
+        # 也没有掠夺者），8:40 局 4 座以上兵营只有 1 个科技实验室 + 1 个反应堆。
+        # 队列太深（>1）时先让当前产能跑完，避免附件排在很后面。
+        if not building.is_idle and len(getattr(building, "orders", ()) or ()) > 1:
             return False
         if self._addon_blocked_until.get(building.tag, 0) > self.time:
             return False
@@ -982,6 +1029,8 @@ class CompetitiveBot(BotAI):
         if isinstance(command, bool) or command is None:
             return False
         if not self._issue(building, command, min_interval=3.0):
+            # 客户端拒绝（或刚发过同一条）时退避 10 秒，别回到“每帧重试”的老路。
+            self._addon_blocked_until[building.tag] = self.time + 10
             return False
         self._addon_orders[building.tag] = (addon, self.time)
         logger.info(
@@ -1423,8 +1472,9 @@ class CompetitiveBot(BotAI):
 
         if self.attack_state == "GATHER":
             self._rally(army)
-            self._manage_medivacs(medivacs, self._home_point())
-            self._manage_tanks(army, self._home_point(), defending=True)
+            staging = self._staging_point()
+            self._manage_medivacs(medivacs, staging)
+            self._manage_tanks(army, staging, defending=True)
             # 撤退后给 20 秒重整时间，避免在 ATTACK / RETREAT 之间来回横跳。
             if self.time - self._retreat_at >= 20 and attack_ready(
                 self._army_supply(),
@@ -1471,7 +1521,7 @@ class CompetitiveBot(BotAI):
         self._manage_tanks(army, target, defending=False)
 
     def _rally(self, army) -> None:
-        point = self._home_point()
+        point = self._staging_point()
         for unit in army.idle:
             if unit.distance_to(point) > 6:
                 self._issue(unit, unit.move(point), 1.0)
@@ -1481,12 +1531,17 @@ class CompetitiveBot(BotAI):
         if now - self._last_army_order < 0.5:
             return
         self._last_army_order = now
+        # 生化打不到空中：把目标限定在地面，避免整队对着运输机/维京下攻击指令后
+        # 原地不动。威胁点优先集火架起坦克等高价值目标——8:16 局首战 14 个阵亡
+        # 陆战队员里 4 个是被架起坦克打掉的，其余是生化集火。
         enemies = self.enemy_units.filter(
-            lambda u: u.distance_to(self._home_point()) < 40
+            lambda u: u.distance_to(self._home_point()) < 40 and not u.is_flying
         )
         target = None
         if enemies:
-            target = min(enemies, key=lambda u: u.distance_to(point))
+            priority = enemies.filter(lambda u: u.type_id in HIGH_VALUE_TARGETS)
+            candidates = priority if priority else enemies
+            target = min(candidates, key=lambda u: u.distance_to(point))
         for unit in army:
             if unit.is_flying:
                 continue
@@ -1496,6 +1551,9 @@ class CompetitiveBot(BotAI):
                 self._issue(unit, unit.attack(target), 1.0)
             elif unit.distance_to(point) > 8:
                 self._issue(unit, unit.move(point), 1.0)
+        # 只在真正接敌时打兴奋剂，避免隔着半个屏幕先扣血。
+        if target is not None and army and target.distance_to(army.center) < 16:
+            self._maybe_stim(army)
 
     def _retreat(self, army) -> None:
         point = self._home_point()

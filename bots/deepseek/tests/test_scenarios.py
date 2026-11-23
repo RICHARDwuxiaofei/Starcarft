@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import pytest
 from helpers import FakeBotWorld, FakeUnit, FakeUnits, load_bot_module
+from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
+from sc2.ids.upgrade_id import UpgradeId
 from sc2.position import Point2
 
 module = load_bot_module()
@@ -452,16 +454,53 @@ def test_addon_skipped_when_slot_blocked():
     assert world.bot._addon_blocked_until[rax.tag] > 150
 
 
-def test_addon_waits_when_barracks_is_busy():
+def test_addon_queues_behind_current_production():
+    """生产中的兵营也要排附件，不能一直等空闲。
+
+    8:16 局 4 座兵营全程 0 附件：没有科技实验室就没有兴奋剂/盾牌与掠夺者，
+    没有反应堆产能也只有一半。旧实现要求 `is_idle`，而兵营几乎一直在训练。
+    """
     world = FakeBotWorld(module)
     world.time_seconds = 150
     world.bot._opening_done = True
     world.bot._open_cc = True
-    world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=103, is_idle=False)
+    rax = world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=103, is_idle=False)
+
+    world.run(world.bot._manage_addons())
+
+    builds = [c for c in world.commands if c.kind == "build"]
+    assert [c.unit for c in builds] == [rax]
+    assert [c.ability for c in builds] == [UnitTypeId.BARRACKSTECHLAB]
+
+
+def test_addon_waits_when_production_queue_is_deep():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    rax = world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=104, is_idle=False)
+    rax.orders = [object(), object()]
 
     world.run(world.bot._manage_addons())
 
     assert [c for c in world.commands if c.kind == "build"] == []
+
+
+def test_addon_order_rejection_backs_off():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.do = lambda command: False
+    rax = world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=105, is_idle=False)
+
+    world.run(world.bot._manage_addons())
+
+    # 客户端拒绝后 10 秒内不再重试，避免回到“每帧提交放置请求”的老问题。
+    assert world.bot._addon_blocked_until[rax.tag] == pytest.approx(160)
+    world.time_seconds = 155
+    world.run(world.bot._manage_addons())
+    assert world.bot._addon_blocked_until[rax.tag] == pytest.approx(160)
 
 
 def test_issue_skips_identical_command_within_interval():
@@ -755,3 +794,206 @@ def test_army_resumes_attack_after_push_retreats():
     world.bot._manage_army()
     assert world.bot.attack_state == "ATTACK"
     assert world.bot._defense_until == pytest.approx(438)
+
+
+# ---------------------------------------------------------------------------
+# 本轮复盘驱动（Sol 6.2 两场）：集结点离开分矿本体 / 防守姿态
+# ---------------------------------------------------------------------------
+
+
+def test_staging_point_moves_away_from_base_towards_enemy():
+    base = Point2((62, 50))
+    enemy_start = Point2((150, 150))
+
+    point = module.staging_point(base, enemy_start, distance=10)
+
+    assert point.distance_to(base) == pytest.approx(10, abs=0.1)
+    assert point != base
+    # 朝对手方向前出，且不超过基地到对手的一半。
+    assert point.distance_to(enemy_start) < base.distance_to(enemy_start)
+    assert point.distance_to(base) < base.distance_to(enemy_start) / 2
+    # 距离为 0 或非法时退化为基地本身，不产生 NaN。
+    assert module.staging_point(base, base, distance=10) == base
+
+
+def test_rally_holds_army_away_from_natural_townhall():
+    world = FakeBotWorld(module)
+    world.time_seconds = 420
+    world.bot._natural = Point2((62, 50))
+    world.bot.townhalls = FakeUnits(
+        [
+            FakeUnit(UnitTypeId.COMMANDCENTER, (50, 50), tag=1),
+            FakeUnit(UnitTypeId.ORBITALCOMMAND, (62, 50), tag=2),
+        ]
+    )
+    for index in range(5):
+        world.add_unit(UnitTypeId.MARINE, (62, 50), is_idle=True, tag=700 + index)
+    army = world.bot._army_units()
+
+    world.bot._rally(army)
+
+    moves = [c for c in world.commands if c.kind == "move"]
+    assert len(moves) == 5
+    expected = module.staging_point(Point2((62, 50)), Point2((150, 150)), distance=10)
+    for command in moves:
+        assert command.target != Point2((62, 50))
+        assert command.target.distance_to(expected) < 0.5
+
+
+def test_defense_stims_bio_when_enemy_pushes():
+    world = FakeBotWorld(module)
+    world.time_seconds = 400
+    world.bot.state.upgrades = {UpgradeId.STIMPACK}
+    world.bot._natural = Point2((62, 50))
+    world.bot._defense_until = 420
+    world.bot.calculate_supply_cost = lambda unit_type: 1.0
+    for index in range(6):
+        world.add_unit(UnitTypeId.MARINE, (61 + index * 0.4, 52), is_idle=False)
+    world.enemy_units = FakeUnits(
+        [FakeUnit(UnitTypeId.MARINE, (64 + i, 52)) for i in range(8)]
+    )
+    world.bot.enemy_units = world.enemy_units
+
+    world.bot._manage_army()
+
+    stims = [
+        c
+        for c in world.commands
+        if c.kind == "ability" and c.ability == AbilityId.EFFECT_STIM_MARINE
+    ]
+    assert stims, "防守时也应该打兴奋剂，而不是只在推进时打"
+
+
+def test_defense_focuses_sieged_tank_over_closer_marine():
+    world = FakeBotWorld(module)
+    world.time_seconds = 400
+    world.bot._natural = Point2((62, 50))
+    world.bot._defense_until = 420
+    world.bot._prev_step_time = 399
+    world.bot.calculate_supply_cost = lambda unit_type: 1.0
+    for index in range(4):
+        world.add_unit(UnitTypeId.MARINE, (60 + index, 52), is_idle=False)
+    tank = FakeUnit(UnitTypeId.SIEGETANKSIEGED, (74, 52))
+    close_marine = FakeUnit(UnitTypeId.MARINE, (61, 52))
+    world.enemy_units = FakeUnits([tank, close_marine])
+    world.bot.enemy_units = world.enemy_units
+
+    world.bot._manage_army()
+
+    attacks = [c for c in world.commands if c.kind == "attack"]
+    assert attacks
+    assert all(c.target is tank for c in attacks)
+
+
+def test_defense_skips_flying_targets_for_ground_bio():
+    world = FakeBotWorld(module)
+    world.time_seconds = 400
+    world.bot._natural = Point2((62, 50))
+    world.bot._defense_until = 420
+    world.bot._prev_step_time = 399
+    world.bot.calculate_supply_cost = lambda unit_type: 1.0
+    for index in range(4):
+        world.add_unit(UnitTypeId.MARINE, (60 + index, 52), is_idle=False)
+    world.enemy_units = FakeUnits(
+        [FakeUnit(UnitTypeId.MEDIVAC, (64, 52), is_flying=True)]
+    )
+    world.bot.enemy_units = world.enemy_units
+
+    world.bot._manage_army()
+
+    # 陆战队打不到运输机：只移动，不把攻击指令下给打不到的目标。
+    assert [c for c in world.commands if c.kind == "attack"] == []
+
+
+def test_defense_holds_stim_until_enemies_are_close():
+    world = FakeBotWorld(module)
+    world.time_seconds = 400
+    world.bot.state.upgrades = {UpgradeId.STIMPACK}
+    world.bot._natural = Point2((62, 50))
+    world.bot._defense_until = 420
+    world.bot._prev_step_time = 399
+    world.bot.calculate_supply_cost = lambda unit_type: 1.0
+    for index in range(4):
+        world.add_unit(UnitTypeId.MARINE, (60 + index * 0.3, 52), is_idle=False)
+    world.enemy_units = FakeUnits([FakeUnit(UnitTypeId.MARINE, (95, 52))])
+    world.bot.enemy_units = world.enemy_units
+
+    world.bot._manage_army()
+
+    # 敌人在半个屏幕外，先不扣血打兴奋剂。
+    stims = [
+        c
+        for c in world.commands
+        if c.kind == "ability" and c.ability == AbilityId.EFFECT_STIM_MARINE
+    ]
+    assert stims == []
+
+
+# ---------------------------------------------------------------------------
+# 本轮复盘驱动（Sol 6.2 两场）：人口上限不能卡在首战
+# ---------------------------------------------------------------------------
+
+
+def test_supply_headroom_follows_production_width():
+    # 61/69、5 座出兵建筑：预留给下一波兵的人口，现在就该开始补站。
+    assert module.supply_depot_needed(61, 69, 0, reserved_supply=10) is True
+    # 旧行为（不预留）会一直等到 65/69 才动，首战就卡在 69。
+    assert module.supply_depot_needed(61, 69, 0) is False
+
+
+def test_supply_manager_prebuilds_when_production_is_wide():
+    world = FakeBotWorld(module)
+    world.time_seconds = 380
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.supply_used = 61
+    world.bot.supply_cap = 69
+    world.bot.minerals = 400
+    for index in range(5):
+        world.add_structure(UnitTypeId.BARRACKS, (44 + index * 2, 44))
+
+    world.run(world.bot._manage_supply())
+
+    assert [b[0] for b in world.builds] == [UnitTypeId.SUPPLYDEPOT]
+
+
+def test_supply_manager_does_not_prebuild_without_production():
+    world = FakeBotWorld(module)
+    world.time_seconds = 380
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.supply_used = 61
+    world.bot.supply_cap = 69
+    world.bot.minerals = 400
+
+    world.run(world.bot._manage_supply())
+
+    # 没有出兵建筑时不提前堆补给站，避免早期浪费。
+    assert world.builds == []
+
+
+def test_supply_manager_allows_third_depot_when_banked():
+    world = FakeBotWorld(module)
+    world.time_seconds = 380
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.supply_used = 73
+    world.bot.supply_cap = 61
+    world.bot.minerals = 500
+    world.bot.already_pending = lambda unit_type: 2
+
+    world.run(world.bot._manage_supply())
+    assert [b[0] for b in world.builds] == [UnitTypeId.SUPPLYDEPOT]
+
+    # 没存款时仍最多排两座。
+    world_poor = FakeBotWorld(module)
+    world_poor.time_seconds = 380
+    world_poor.bot._opening_done = True
+    world_poor.bot._open_cc = True
+    world_poor.bot.supply_used = 73
+    world_poor.bot.supply_cap = 61
+    world_poor.bot.minerals = 150
+    world_poor.bot.already_pending = lambda unit_type: 2
+
+    world_poor.run(world_poor.bot._manage_supply())
+    assert world_poor.builds == []
