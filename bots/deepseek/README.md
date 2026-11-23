@@ -158,7 +158,8 @@ SC2 报 `Unknown System Error 480098739`（`ErrorType NON-FATAL`）。
 
 ## 第三轮迭代：Sol 6.2 两场复盘（2026-11-24，第 7 代）
 
-数据来源：`results/gui/20261124-deepseek-sol-rematch/`（8:39 负）与
+- 本地提交：`64d8375`（父提交 `bd79bd3`，分支 `agent/deepseek-bot`，未推送）
+- 数据来源：`results/gui/20261124-deepseek-sol-rematch/`（8:39 负）与
 `results/gui/20261124-deepseek-sol-fast-watch/`（8:15 负），对手为 6.2 Sol `3d4470d`。
 完整复盘（时间线、坐标、双方兵力、指令统计、指标基线）见
 [`REVIEW_20261124_SOL62.md`](REVIEW_20261124_SOL62.md)。
