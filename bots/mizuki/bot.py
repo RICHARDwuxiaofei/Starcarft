@@ -14,6 +14,7 @@ from sc2.position import Point2
 from sc2.unit import Unit
 
 from .combat import control_combat
+from .construction import CommandCenterRecovery
 from .evacuation import MineralLineEvacuation, infantry_breach_zones
 from .policy import (
     Signals,
@@ -84,6 +85,7 @@ class CompetitiveBot(BotAI):
         super().__init__()
         self._trace = trace
         self._evacuation = MineralLineEvacuation()
+        self._cc_recovery = CommandCenterRecovery()
         self._wall_anchors: (
             tuple[Point2 | None, Point2 | None, Point2 | None] | None
         ) = None
@@ -171,6 +173,7 @@ class CompetitiveBot(BotAI):
         self._track_base_losses()
         if iteration % 3 == 0:
             self._update_expansion_risk(contacts, structures)
+            self._recover_command_centers(contacts + structures)
             await self._macro(state)
         await control_combat(self, iteration)
         trace = getattr(self, "_trace", None)
@@ -479,7 +482,13 @@ class CompetitiveBot(BotAI):
         evac = getattr(self, "_evacuation", None)
         return not evac or evac.margin(point) >= 0
 
+    def _recover_command_centers(self, contacts: list[Unit]) -> None:
+        self._cc_recovery.update(self, contacts, self._evacuation, self._trace_intent)
+
     def _allows_worker_task(self, worker: Unit, point: Point2 | None = None) -> bool:
+        recovery = getattr(self, "_cc_recovery", None)
+        if recovery and recovery.reserved(worker.tag):
+            return False
         evac = getattr(self, "_evacuation", None)
         if not evac or not evac.zones:
             return True
@@ -505,13 +514,20 @@ class CompetitiveBot(BotAI):
 
     async def _distribute_economy(self) -> None:
         evac = getattr(self, "_evacuation", None)
-        if not (evac and evac.zones) and not surplus_gas(self.minerals, self.vespene):
+        recovery = getattr(self, "_cc_recovery", None)
+        awaiting_resume = recovery is not None and recovery.awaiting_worker_order
+        if (
+            not awaiting_resume
+            and not (evac and evac.zones)
+            and not surplus_gas(self.minerals, self.vespene)
+        ):
             await self.distribute_workers(
                 resource_ratio=2.4 if self.time < 230 else 1.8
             )
             return
         # The stock allocator ignores protected workers and unsafe targets.
-        # During a siege or gas surplus, use the filtered mineral allocator.
+        # Use the filtered allocator during a siege, gas surplus or while
+        # the last Smart order has not yet appeared in an observation.
         self._distribute_minerals_only()
 
     def _distribute_minerals_only(self) -> None:
@@ -1359,7 +1375,8 @@ class CompetitiveBot(BotAI):
             (
                 u
                 for u in abandoned
-                if CompetitiveBot._safe_worker_point(self, u.position)
+                if u.type_id != U.COMMANDCENTER
+                and CompetitiveBot._safe_worker_point(self, u.position)
             ),
             key=lambda u: (u.build_progress, -u.tag),
             default=None,

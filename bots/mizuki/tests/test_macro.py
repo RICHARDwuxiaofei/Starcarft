@@ -117,6 +117,7 @@ def test_frame_dispatch_only_directs_visible_units(monkeypatch):
         _macro=AsyncMock(),
         _evacuate_workers=Mock(),
         _track_base_losses=Mock(),
+        _recover_command_centers=Mock(),
         _update_expansion_risk=Mock(),
     )
     combat = AsyncMock()
