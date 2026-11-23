@@ -1,44 +1,26 @@
-# Starcarft — SC2 Python Bot Arena
+# Starcarft · StarCraft II Bot 擂台
 
-A shared repository for **independently authored StarCraft II bots** using [`burnysc2`](https://github.com/BurnySc2/python-sc2). The initial setup does not contain bots or a functioning match harness.
+Starcarft 是一个用 Python 和 burnysc2 开发、运行和对比原创 StarCraft II Bot 的项目。各参赛者在独立分支开发，由统一对局程序在本机加载 Bot，保存录像与结果，再据此迭代。
 
-## Machines
+- 默认人族，入口为 `bots/<agent>/bot.py` 中可无参数实例化的 `CompetitiveBot`。
+- 当前本机验收环境为 STUDIO、Python 3.12、burnysc2 7.3.0、SC2 5.0.17.98745 和 RedCityLE。
+- 已完成本机实时和加速双 Bot 对局。云端用于同步代码、共享复盘和离线验证。实战由用户安排。
+- 对局使用正常视野与本地决策。原创、版本编号、工作区和观战规则见 [AGENTS.md](AGENTS.md)，接口见 [比赛约定](docs/ARENA_CONTRACT.md)。
 
-| Role | Machine | SC2 path | Python |
-| --- | --- | --- | --- |
-| Primary development | STUDIO | `C:\baoxue\StarCraft II` | 3.12 |
-| Secondary match/test | WXFLAPTOP | `D:\baoxue\StarCraft II` | 3.13 |
+## 资料索引
 
-Both clients were inspected at build `5.0.17.98310`. Match interoperability has **not** been executed.
+- [历代版本与比赛记录](docs/ARENA_HISTORY.md)
+- [环境检查](tools/check_environment.py)
+- [首批完整录像与复盘](https://github.com/RICHARDwuxiaofei/Starcarft/blob/e43adf7a4a05a99ab42840dcc0272ea6208b51f7/replays/arena-20261123/README.md)
+- [四家循环赛录像与复盘](https://github.com/RICHARDwuxiaofei/Starcarft/blob/0f9899696d1ed67e893bf9d8353e2a5e5226bb81/replays/round-robin-20261124/README.md)
 
-## Install / activate
+## 环境检查
 
-Windows PowerShell, at repository root:
+在 STUDIO 的仓库根目录运行已有 Python 环境：
 
 ```powershell
-py -3.12 -m venv .venv      # laptop: py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-$env:SC2PATH = 'C:\baoxue\StarCraft II'  # laptop: D:\baoxue\StarCraft II
+$env:SC2PATH = 'C:\baoxue\StarCraft II'
 .\.venv\Scripts\python.exe tools\check_environment.py
 ```
 
-`import sc2` is correct; the PyPI distribution name is `burnysc2`, not the retired `sc2` package.
-
-## Project layout
-
-- `bots/codex/`: agent Codex only
-- `bots/antigravity/`: agent Antigravity/Gemini only
-- `bots/other/`: optional other agents
-- `docs/ARENA_CONTRACT.md`: shared bot interface and fair-match rules
-- `prompts/`: identical task specification with workspace-specific boundaries
-- `maps/`: local maps (ignored by Git)
-- `replays/`, `results/`: local-generated outputs (ignored by Git)
-- `tools/check_environment.py`: read-only environment checker
-
-## Maps and networking
-
-`RedCityLE.SC2Map` has been downloaded to both SC2 installation `Maps` directories, with identical SHA-256 `C32E64E6AEB40EBAAC3F662A15558E4615369BFA19386AD96236800012B40593`. Source: https://github.com/ttinies/sc2gameMapRepo/blob/master/sc2maptool/maps/RedCityLE.SC2Map. Map file loading has not yet been tested in-game. Local map binaries are not in Git. Both machines currently share `192.168.5.0/24`, with bidirectional ICMP confirmed. No tunneling is needed between those two machines. Remote-friend games should first try a private overlay (Tailscale / ZeroTier) and a separately implemented, tested SC2 API host/join flow. A Battle.net lobby is not the same as SC2 API multiplayer.
-
-## Git workflow
-
-Develop on local STUDIO. Push to GitHub to synchronize. Three independent Git worktrees have been created: `D:\CODE\Starcarft-agent-worktrees\codex` (`agent/codex-bot`), `D:\CODE\Starcarft-agent-worktrees\antigravity` (`agent/antigravity-bot`), `D:\CODE\Starcarft-agent-worktrees\other` (`agent/other-bot`). Each agent may edit only its own `bots/<agent>/` folder within its assigned worktree, and should use `D:\CODE\Starcarft\.venv\Scripts\python.exe` as the existing Python environment. The integration owner reviews and merges changes. Do not have multiple agents edit the same checkout at the same time. The existing test file `1` is preserved.
+游戏安装、地图和本地对局产物存放在各自原目录。仓库中的 `results/` 默认忽略，经过选择的复盘资料单独发布到 GitHub 资料分支。
