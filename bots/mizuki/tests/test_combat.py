@@ -491,3 +491,91 @@ def test_precontact_post_is_abandoned_if_firing_arc_covers_it():
     asyncio.run(control_combat(bot, 0))
     assert bot._mizuki_combat_state.reserve_tank is None
     assert tank.actions and tank.actions[0][0] == "move"
+
+
+def _sole_tank_at_outer_handoff():
+    natural = DummyUnit(901, U.COMMANDCENTER, point(32, 32), is_structure=True)
+    third = DummyUnit(
+        902, U.COMMANDCENTER, point(52, 50), is_structure=True, is_ready=False
+    )
+    tank = DummyUnit(30, U.SIEGETANKSIEGED, point(36, 36), ground_range=13)
+    marines = [DummyUnit(i, U.MARINE, point(44, 41)) for i in range(1, 15)]
+    target = DummyUnit(200, U.BARRACKS, point(80, 80), is_structure=True)
+    bot = dummy_bot(units=[tank, *marines], structures=[target], now=389)
+    bot.townhalls.extend([natural, third])
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.phase is _Phase.PRESSURE
+    assert not tank.actions and marines[0].actions
+    third.is_ready = True
+    bot.time += 1
+    return bot, third, tank, marines
+
+
+def test_third_completion_does_not_immediately_unseat_sole_posted_tank():
+    bot, third, tank, marines = _sole_tank_at_outer_handoff()
+    asyncio.run(control_combat(bot, 2))
+    assert not tank.actions
+    assert bot._mizuki_combat_state.post_handoff_until == 435
+    # A destroyed expansion should not immediately stall the field or vacate home.
+    bot.townhalls.remove(third)
+    bot.time += 40
+    asyncio.run(control_combat(bot, 4))
+    assert not tank.actions
+    assert marines[0].actions[-1] == ("attack", bot.enemy_structures[0].position)
+    bot.time += 6
+    asyncio.run(control_combat(bot, 6))
+    assert tank.actions == [(AbilityId.UNSIEGE_UNSIEGE, None)]
+
+
+def test_handoff_releases_when_backup_tank_finishes():
+    bot, _, tank, _ = _sole_tank_at_outer_handoff()
+    asyncio.run(control_combat(bot, 2))
+    assert not tank.actions
+    bot.units.append(DummyUnit(31, U.SIEGETANK, point(23, 22)))
+    bot.time += 5
+    asyncio.run(control_combat(bot, 4))
+    assert tank.actions == [(AbilityId.UNSIEGE_UNSIEGE, None)]
+
+
+def test_handoff_releases_when_field_force_already_has_local_advantage():
+    bot, _third, tank, marines = _sole_tank_at_outer_handoff()
+    asyncio.run(control_combat(bot, 2))
+    assert not tank.actions
+    for marine in marines:
+        marine.position = point(51, 50)
+    enemy = DummyUnit(80, U.MARAUDER, point(53, 50))
+    bot.enemy_units.append(enemy)
+    bot.time += 5
+    asyncio.run(control_combat(bot, 4))
+    assert tank.actions == [(AbilityId.UNSIEGE_UNSIEGE, None)]
+    assert marines[0].actions[-1] == ("attack", enemy)
+
+
+def test_handoff_does_not_override_unsafe_siege_arc():
+    bot, _, tank, _ = _sole_tank_at_outer_handoff()
+    asyncio.run(control_combat(bot, 2))
+    assert not tank.actions
+    guns = [
+        DummyUnit(80, U.SIEGETANKSIEGED, point(48, 35), ground_range=13),
+        DummyUnit(81, U.SIEGETANKSIEGED, point(49, 35), ground_range=13),
+    ]
+    bot.enemy_units.extend(guns)
+    bot.time += 5
+    asyncio.run(control_combat(bot, 4))
+    assert bot._mizuki_combat_state.post_handoff_until <= bot.time
+    assert tank.actions == [("attack", guns[0])]
+
+
+def test_handoff_keeps_post_when_natural_attack_starts_outside_tank_range():
+    bot, _, tank, marines = _sole_tank_at_outer_handoff()
+    asyncio.run(control_combat(bot, 2))
+    attacker = DummyUnit(80, U.MARAUDER, point(20, 35))
+    bot.enemy_units.append(attacker)
+    bot.time += 5
+    asyncio.run(control_combat(bot, 4))
+    assert not tank.actions
+    assert marines[0].actions[-1] == ("attack", attacker.position)
+    attacker.position = point(25, 35)
+    bot.time += 1
+    asyncio.run(control_combat(bot, 6))
+    assert tank.actions == [("attack", attacker)]

@@ -14,7 +14,7 @@ from sc2.position import Point2
 from sc2.unit import Unit
 
 from .combat import control_combat
-from .evacuation import MineralLineEvacuation
+from .evacuation import MineralLineEvacuation, infantry_breach_zones
 from .policy import (
     Signals,
     air_targets,
@@ -457,13 +457,22 @@ class CompetitiveBot(BotAI):
                 )
             )
         ]
-        evac.update(relevant, self.state.dead_units, self.time)
+        infantry = [
+            unit
+            for unit in contacts
+            if unit.type_id in {U.MARINE, U.MARAUDER}
+            and not (unit.is_cloaked and not unit.is_revealed)
+        ]
+        breach = infantry_breach_zones(self, infantry, self.time)
+        evac.update(relevant, self.state.dead_units, self.time, breach)
         moved = self._evacuation.react(self, self.time)
         if moved:
             self._trace_intent(
                 "evacuate_workers",
                 orders=moved,
                 protected=len(self._evacuation.sheltered),
+                infantry_lines=sum(tag < 0 for tag in evac.zones),
+                siege_sources=sum(tag >= 0 for tag in evac.zones),
             )
 
     def _safe_worker_point(self, point: Point2) -> bool:

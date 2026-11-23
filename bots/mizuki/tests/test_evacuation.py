@@ -97,7 +97,7 @@ def test_mineral_line_gets_warning_even_if_hall_is_outside_trigger_ring():
     for w in workers:
         w.gather.assert_not_called()
     bot._trace_intent.assert_called_once_with(
-        "evacuate_workers", orders=37, protected=37
+        "evacuate_workers", orders=37, protected=37, infantry_lines=0, siege_sources=1
     )
 
 
@@ -218,3 +218,91 @@ def test_safe_mining_unlocks_worker_even_while_original_siege_remains():
     CompetitiveBot._evacuate_workers(bot, [gun])
     assert CompetitiveBot._allows_worker_task(bot, worker, point(144, 19))
     assert not CompetitiveBot._allows_worker_task(bot, worker, point(139, 41))
+
+
+def infantry(tag, x, y, kind=U.MARINE):
+    return Object(
+        tag=tag,
+        position=point(x, y),
+        type_id=kind,
+        is_ready=True,
+        health_percentage=1,
+        is_cloaked=False,
+    )
+
+
+def test_overwhelming_bio_push_relocates_worker_before_hall_is_destroyed():
+    workers = [scv(i + 1, 146, 34 + i * 0.3, 70) for i in range(6)]
+    safe = scv(25, 143, 18, 71)
+    bot = fixture([*workers, safe])
+    bot.mineral_field[0].position = point(148, 42)
+    bot.units = [infantry(99, 154, 38, U.SIEGETANKSIEGED)]
+    for hall in bot.townhalls:
+        hall.health_percentage = 0.95
+    attackers = [infantry(90 + i, 143 + i * 0.6, 43, U.MARAUDER) for i in range(7)]
+    CompetitiveBot._evacuate_workers(bot, attackers)
+    natural = bot.townhalls[0]
+    assert -natural.tag in bot._evacuation.zones
+    assert {w.tag for w in workers} <= bot._evacuation.sheltered
+    assert all(w.move.called or w.gather.called for w in workers)
+    safe.move.assert_not_called()
+    safe.gather.assert_not_called()
+    bot.time += 4
+    CompetitiveBot._evacuate_workers(bot, [])
+    assert not CompetitiveBot._allows_worker_task(bot, workers[0], point(139, 41))
+    bot.time += 2
+    CompetitiveBot._evacuate_workers(bot, [])
+    assert not bot._evacuation.zones
+    assert not bot._evacuation.sheltered
+
+
+def test_healthy_well_covered_natural_keeps_mining_during_small_bio_contact():
+    worker = scv(1, 147, 38, 70)
+    bot = fixture([worker])
+    bot.mineral_field[0].position = point(148, 42)
+    bot.units = [infantry(i, 149, 39) for i in range(15)]
+    for hall in bot.townhalls:
+        hall.health_percentage = 1
+    attackers = [infantry(50 + i, 146 + i / 2, 43) for i in range(5)]
+    CompetitiveBot._evacuate_workers(bot, attackers)
+    assert not bot._evacuation.zones
+    worker.move.assert_not_called()
+    worker.gather.assert_not_called()
+
+
+def test_brief_bio_zone_does_not_expire_live_siege_zone():
+    bot = fixture([])
+    bot.mineral_field[0].position = point(148, 42)
+    bot.units = []
+    for hall in bot.townhalls:
+        hall.health_percentage = 0.72
+    gun = tank(99, 137, 52)
+    attackers = [infantry(50 + i, 141 + i / 2, 43) for i in range(8)]
+    CompetitiveBot._evacuate_workers(bot, [gun, *attackers])
+    assert set(bot._evacuation.zones) == {99, -bot.townhalls[0].tag}
+    bot.time += 6
+    CompetitiveBot._evacuate_workers(bot, [])
+    assert set(bot._evacuation.zones) == {99}
+
+
+def test_evacuated_worker_resumes_mining_at_main_after_natural_is_lost():
+    worker = scv(1, 147, 39, 70)
+    bot = fixture([worker])
+    bot.mineral_field[0].position = point(148, 42)
+    bot.units = []
+    for hall in bot.townhalls:
+        hall.health_percentage = 0.7
+    attackers = [infantry(50 + i, 143 + i, 43, U.MARAUDER) for i in range(7)]
+    CompetitiveBot._evacuate_workers(bot, attackers)
+    assert worker.move.called
+    natural = bot.townhalls.pop(0)
+    bot.state.dead_units = {natural.tag}
+    worker.position = point(143, 29)
+    worker.order_target = None
+    worker.is_idle = True
+    worker.is_collecting = False
+    bot.time += 2
+    CompetitiveBot._evacuate_workers(bot, attackers)
+    worker.gather.assert_called_once()
+    assert worker.gather.call_args.args[0].tag in (71, 72)
+    assert -natural.tag in bot._evacuation.zones

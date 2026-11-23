@@ -81,6 +81,9 @@ class _CombatState:
     reserve_tank: int | None = None
     reserve_bio: tuple[int, ...] = ()
     outer_contest_until: float = 0.0
+    unfinished_outer_tags: frozenset[int] = frozenset()
+    post_handoff_until: float = 0.0
+    outer_handoff_used: bool = False
 
 
 @dataclass(frozen=True)
@@ -601,12 +604,17 @@ def _natural_reserve(
         or not halls[1].is_ready
     ):
         state.reserve_tank, state.reserve_bio = None, ()
+        state.unfinished_outer_tags = frozenset()
+        state.post_handoff_until = 0.0
         return None
     natural = halls[1]
     if natural.tag != state.natural_tag:
         state.natural_tag = natural.tag
         state.reserve_tank, state.reserve_bio = None, ()
         state.outer_contest_until = 0.0
+        state.unfinished_outer_tags = frozenset()
+        state.post_handoff_until = 0.0
+        state.outer_handoff_used = False
         center = bot.game_info.map_center
         if natural.distance_to(center) < 1:
             center = natural.position.offset(natural.position - bot.start_location)
@@ -622,12 +630,34 @@ def _natural_reserve(
             None,
         )
     post = state.natural_post
-    if post is None or phase is _Phase.RETREAT:
-        return None
-    if defense and defense[0] in (halls[0].position, natural.position):
-        # An actual incursion supersedes a peacetime sentry post.
+    if post is None:
         return None
     outer = halls[2:]
+    posted_tank = (
+        tanks[0]
+        if len(tanks) == 1
+        and tanks[0].tag == state.reserve_tank
+        and tanks[0].type_id == U.SIEGETANKSIEGED
+        and tanks[0].distance_to(post) <= 3
+        else None
+    )
+    if posted_tank is None:
+        state.post_handoff_until = 0.0
+    elif not state.outer_handoff_used and any(
+        h.is_ready and h.tag in state.unfinished_outer_tags for h in outer
+    ):
+        # Finishing a CC doesn't make it defendable. Keep an already-positioned
+        # sole tank through the handoff while replacement armor can finish.
+        state.post_handoff_until = now + 45.0
+        state.outer_handoff_used = True
+    state.unfinished_outer_tags = frozenset(h.tag for h in outer if not h.is_ready)
+    handoff = now < state.post_handoff_until
+    if defense and defense[0] == halls[0].position:
+        return None
+    if not handoff and (
+        phase is _Phase.RETREAT or (defense and defense[0] == natural.position)
+    ):
+        return None
     ground_threats = [
         e
         for e in enemies
@@ -641,13 +671,31 @@ def _natural_reserve(
     if threatened_outer:
         state.outer_contest_until = now + 9.0
         if siege_guard is None and all(
-            _strength([u for u in ground if u.distance_to(h) <= 13])
-            >= max(7.0, 1.45 * _strength(threats))
+            _strength(
+                [
+                    u
+                    for u in ground
+                    if u.distance_to(h) <= 13 and (not handoff or u is not posted_tank)
+                ]
+            )
+            >= max(12.0 if handoff else 7.0, 1.45 * _strength(threats))
             for h, threats in threatened_outer
         ):
             # Don't hold armor back from a real, already concentrated counterattack.
             state.outer_contest_until = now
+            state.post_handoff_until = now
             return None
+    if handoff and posted_tank is not None:
+        deployed = tuple(e for e in ground_threats if e.type_id == U.SIEGETANKSIEGED)
+        if not (
+            _inside_siege(post, deployed, 2)
+            or any(e.distance_to(posted_tank) < 3 for e in ground_threats)
+        ):
+            # The field force still follows the regular orders, including during
+            # retreat or a direct natural attack. Only the posted tank stays.
+            return post, {posted_tank.tag}
+        state.post_handoff_until = now
+        return None
     contested = now < state.outer_contest_until
     preparing = any(not h.is_ready for h in outer)
     if not contested and phase is not _Phase.GATHER and not preparing:

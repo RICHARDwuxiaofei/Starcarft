@@ -1,4 +1,4 @@
-"""Workers only react to siege fire sources visible in ordinary API observations."""
+"""Mineral-line evacuation driven only by ordinary visible observations."""
 
 from __future__ import annotations
 
@@ -19,6 +19,61 @@ class SiegeZone:
         return self.position.distance_to(point) - self.radius
 
 
+_INFANTRY_WEIGHT = {U.MARINE: 1.0, U.MARAUDER: 1.5}
+_DEFENDER_WEIGHT = {**_INFANTRY_WEIGHT, U.SIEGETANK: 1.5, U.SIEGETANKSIEGED: 3.5}
+
+
+def infantry_breach_zones(bot, infantry, now: float) -> dict[int, SiegeZone]:
+    """Cover the actual approach to a mineral line overwhelmed by visible bio."""
+    if len(infantry) < 4:
+        return {}
+    own = [u for u in bot.units if u.type_id in _DEFENDER_WEIGHT and u.is_ready]
+    zones = {}
+    for hall in bot.townhalls.ready:
+        if hall.is_flying:
+            continue
+        patches = [
+            m.position
+            for m in bot.mineral_field.closer_than(9, hall)
+            if m.mineral_contents > 0
+        ]
+        if not patches:
+            continue
+        targets = [hall.position, *patches]
+
+        def to_line(unit, targets=targets):
+            return min(unit.distance_to(p) for p in targets)
+
+        attackers = [u for u in infantry if u.distance_to(hall) <= 20]
+        attackers.sort(key=lambda u: (to_line(u), u.tag))
+        if len(attackers) < 4 or to_line(attackers[0]) > 11:
+            continue
+        attack = sum(_INFANTRY_WEIGHT[u.type_id] for u in attackers)
+        defense = sum(
+            _DEFENDER_WEIGHT[u.type_id] * u.health_percentage
+            for u in own
+            if u.distance_to(hall) <= 13
+        )
+        # Healthy, covered bases should not abandon mining on first contact.
+        breached = to_line(attackers[0]) <= 7 and hall.health_percentage < 0.82
+        if not breached and attack < max(5, 1.2 * defense + 1):
+            continue
+        vanguard = attackers[: min(5, len(attackers))]
+        center = Point2(
+            (
+                sum(u.position.x for u in vanguard) / len(vanguard),
+                sum(u.position.y for u in vanguard) / len(vanguard),
+            )
+        )
+        # The nearest units to the mineral line determine the evacuation arc;
+        # a sprawling rear formation does not quarantine the rest of the map.
+        radius = min(13, max(10, center.distance_to(vanguard[0].position) + 8))
+        # SC2 unit tags are positive; a negative key marks a short bio alert
+        # without colliding with actual siege-tank tags or death events.
+        zones[-hall.tag] = SiegeZone(center, radius, now)
+    return zones
+
+
 @dataclass
 class MineralLineEvacuation:
     zones: dict[int, SiegeZone] = field(default_factory=dict)
@@ -26,12 +81,21 @@ class MineralLineEvacuation:
     orders: dict[int, tuple[Point2, float]] = field(default_factory=dict)
     last_exposed: dict[int, float] = field(default_factory=dict)
 
-    def update(self, contacts, dead: set[int], now: float) -> None:
+    def update(
+        self,
+        contacts,
+        dead: set[int],
+        now: float,
+        infantry: dict[int, SiegeZone] | None = None,
+    ) -> None:
         self.zones = {
             tag: zone
             for tag, zone in self.zones.items()
-            if tag not in dead and now - zone.observed <= 9
+            if (tag < 0 or tag not in dead)
+            and now - zone.observed <= (5 if tag < 0 else 9)
         }
+        if infantry:
+            self.zones.update(infantry)
         for enemy in contacts:
             if enemy.type_id == U.SIEGETANKSIEGED:
                 self.zones[enemy.tag] = SiegeZone(
