@@ -9,9 +9,9 @@
 | 网页端 Pro | 第 1 代 `ea6be9c`，实战基准 `b301d0b`（CLI 修订）；第 2 代 `42d469a` |
 | Codex Sol | 第 1 代 `fbc9c54`；第 2 代 `3d4470d`；第 3 代 `cb7618d`（二矿回防的步兵避开已侦测的攻城坦克射程，离线验证，待实战） |
 | Antigravity（AGY） | 第 1 代 `c740e9c`；第 2 代 `7f20fad` |
-| DeepSeek | 第 1 代 `cfc466d`（`ad89f42` 为文档修订）；第 2 代 `7c4513a`；第 3 代 `55bc094`；第 4 代 `2858976`；第 5 代 `32e1b50`；第 6 代 `bd79bd3`；第 7 代 `64d8375`（记录提交 `9f0967a`） |
+| DeepSeek | 第 1 代 `cfc466d`（`ad89f42` 为文档修订）；第 2 代 `7c4513a`；第 3 代 `55bc094`；第 4 代 `2858976`；第 5 代 `32e1b50`；第 6 代 `bd79bd3`；第 7 代 `64d8375`（记录提交 `9f0967a`）；第 8 代 `6b0d196`（记录提交 `0c8349b`） |
 | 混元 | 第 1 代 `f98f317`；第 2 代 `fbe071c`；第 3 代 `52daacc` |
-| Mizuki | 第 1 代 `36029e4`；第 2 代 `e3e4346`；第 3 代 `91fb20e`；第 4 代 `361e7ac`；第 5 代正式锁定 `ebdc49d`；第 6 代训练 `3b17a48`；第 7 代训练 `683ef07`。`4a4ce3c`、`dfef46c` 为诊断或复盘工具修订。 |
+| Mizuki | 第 1 代 `36029e4`；第 2 代 `e3e4346`；第 3 代 `91fb20e`；第 4 代 `361e7ac`；第 5 代正式锁定 `ebdc49d`；第 6 代训练 `3b17a48`；第 7 代训练 `683ef07`；第 8 代训练 `ff370ba`。`4a4ce3c`、`dfef46c` 为诊断或复盘工具修订。 |
 
 ## 已有赛历
 
@@ -54,3 +54,7 @@ DeepSeek 9f0967a（代码 64d8375）对 Mizuki 683ef07，RedCityLE、加速、�
 训练第 7 代 683ef07 在 RedCityLE、SC2 5.0.17.98745、加速、种子 98746 下补打三场，现实上限 15 分钟，均自然判定：9:04 负 AGY 第 2 代 7f20fad，15:46 负 Sol 第 3 代 cb7618d，11:01 负网页端第 2 代 42d469af。DeepSeek 同版本的 11:08 胜局沿用，不重打。
 
 [四场录像、复盘与第 8 代迭代任务](https://github.com/RICHARDwuxiaofei/Starcarft/blob/09afafbd396c7c27e59d7d15ba8c40706b0256f9/replays/mizuki-gen7-20261124/README.md)
+
+## Mizuki 训练第 8 代并行对照
+
+Mizuki ff370ba 对 DeepSeek 第 8 代 0c8349b（代码 6b0d196）和 AGY 第 2 代 7f20fad，两场并行，RedCityLE、SC2 5.0.17.98745、加速、对手一号位、种子 98746、现实上限 15 分钟。Mizuki 18:42 自然胜 DeepSeek（末尾评分 12300:0），10:11 自然负 AGY（Mizuki 750:7350）。本机录像、评分和复盘在 Codex 工作区 results/codex-mizuki8-matches-20261124-034608/。
