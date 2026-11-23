@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from sc2.position import Point2
 
+from .engagement import RollingTrade, TradeReport
 from .intelligence import WORKERS, unit_power
 from .model import BattlePlan, Composition, Stance
 
@@ -56,6 +57,16 @@ class Strategist:
         self._attack_entry_supply = 0.0
         self._last_home_threat_at = -math.inf
         self._last_defense_point: Point2 | None = None
+        self.trade = RollingTrade(config.trade_window_seconds)
+        self.trade_report = TradeReport()
+        self._regroup_point: Point2 | None = None
+        self._regroup_home_tag: int | None = None
+        self._regroup_started_at = 0.0
+        self._regroup_fraction = 0.0
+        self._retreat_reason = ""
+        self._bad_trade_retreats = 0
+        self._last_bad_trade: dict[str, float] | None = None
+        self._last_update = 0.0
 
     def _set_stance(self, stance: Stance, now: float) -> None:
         if stance != self.stance:
@@ -75,8 +86,38 @@ class Strategist:
             return start
         return start.towards(end, min(distance, start.distance_to(end)))
 
+    def _lock_regroup_point(self, point: Point2, halls) -> None:
+        self._regroup_point = point
+        self._regroup_home_tag = (
+            min(halls, key=lambda hall: hall.position.distance_to(point)).tag if halls else None
+        )
+
+    def diagnostics(self) -> dict:
+        """记录触发证据与归队进度；全局分数不能定位某一个局部战场。"""
+        report = self.trade_report
+        return {
+            "trade_available": report.available,
+            "trade_seconds": round(report.seconds, 3),
+            "army_loss": round(report.loss, 2),
+            "enemy_gain": round(report.gain, 2),
+            "bad_trade": report.is_bad(self.config.trade_min_loss, self.config.trade_loss_ratio),
+            "bad_trade_retreats": self._bad_trade_retreats,
+            "regroup_active": self._regroup_point is not None,
+            "regroup_point": list(self._regroup_point) if self._regroup_point is not None else None,
+            "regroup_seconds": (
+                round(self._last_update - self._regroup_started_at, 3)
+                if self._regroup_point is not None
+                else 0.0
+            ),
+            "regroup_fraction": round(self._regroup_fraction, 3),
+            "last_bad_trade": self._last_bad_trade,
+        }
+
     def update(self, bot: BotAI, intel: Intelligence) -> BattlePlan:
         now = float(bot.time)
+        self._last_update = now
+        score = getattr(getattr(bot, "state", None), "score", None)
+        self.trade_report = self.trade.update(now, score)
         report = intel.report
         workers = len(bot.workers)
         halls = sorted(
@@ -106,6 +147,21 @@ class Strategist:
                 safest,
             ),
         )
+        if self._regroup_point is not None:
+            # 新矿或搜索目标变化不能拖动重整点；原基地丢失/起飞才另选落点。
+            anchor_lost = self._regroup_home_tag is not None and not any(
+                hall.tag == self._regroup_home_tag for hall in halls
+            )
+            # 一度没有落地基地时只能临时回原出生地；重建/重新落地后要重新绑定。
+            anchor_recovered = self._regroup_home_tag is None and bool(halls)
+            if (
+                anchor_lost
+                or anchor_recovered
+                or not bot.in_map_bounds(self._regroup_point)
+                or not bot.in_pathing_grid(self._regroup_point)
+            ):
+                self._lock_regroup_point(fallback, completed_halls or halls)
+            fallback = self._regroup_point
         army = [unit for unit in bot.units if unit.type_id not in WORKERS]
         combat = [unit for unit in army if unit.can_attack_ground or unit.can_attack_air]
         army_supply = max(0.0, float(bot.supply_army))
@@ -129,7 +185,19 @@ class Strategist:
             and contact.position.distance_to(center) < 18.0
         )
         local_ratio = local_friendly / max(1.0, local_enemy)
+        locally_outmatched = local_enemy >= 4.0 and local_ratio < self.config.retreat_ratio
         reason = "集结与经济建设"
+
+        def gathered_fraction() -> float:
+            total = sum(unit_power(bot, unit) for unit in combat)
+            gathered = sum(
+                unit_power(bot, unit)
+                for unit in combat
+                if unit.position.distance_to(fallback) <= self.config.regroup_radius
+            )
+            return gathered / total if total > 0 else 0.0
+
+        self._regroup_fraction = gathered_fraction() if self._regroup_point is not None else 0.0
 
         if report.home_threat is not None:
             self._last_home_threat_at = now
@@ -143,23 +211,44 @@ class Strategist:
         else:
             if self.stance == Stance.DEFEND:
                 self._set_stance(Stance.HOLD, now)
-            large_losses = army_supply < max(10.0, self._attack_entry_supply * 0.5)
-            locally_outmatched = local_enemy >= 4.0 and local_ratio < self.config.retreat_ratio
-            if self.stance in {Stance.ATTACK, Stance.SEARCH} and (
-                locally_outmatched or large_losses
-            ):
+            if self._regroup_point is not None:
+                # 回防可以打断撤退，但不能替代尚未完成的归队条件。
                 self._set_stance(Stance.RETREAT, now)
-                reason = "局部兵力劣势或推进损失过重，保存剩余兵力"
+            large_losses = army_supply < max(10.0, self._attack_entry_supply * 0.5)
+            bad_trade = self.trade_report.is_bad(
+                self.config.trade_min_loss, self.config.trade_loss_ratio
+            )
+            if self.stance in {Stance.ATTACK, Stance.SEARCH} and (
+                locally_outmatched or large_losses or bad_trade
+            ):
+                self._lock_regroup_point(fallback, completed_halls or halls)
+                self._regroup_started_at = now
+                self._regroup_fraction = gathered_fraction()
+                self._set_stance(Stance.RETREAT, now)
+                if bad_trade:
+                    self._bad_trade_retreats += 1
+                    self._last_bad_trade = {
+                        "game_time": round(now, 3),
+                        "army_loss": round(self.trade_report.loss, 2),
+                        "enemy_gain": round(self.trade_report.gain, 2),
+                        "seconds": round(self.trade_report.seconds, 3),
+                    }
+                    self._retreat_reason = "近期交换持续不利，停止补兵掩盖的消耗并重整"
+                else:
+                    self._retreat_reason = "局部兵力劣势或推进损失过重，保存剩余兵力"
             if self.stance == Stance.RETREAT:
-                elapsed = now - self._entered_at
-                rallied = (
-                    not combat
-                    or sum(u.position.distance_to(rally) < 15 for u in combat) >= len(combat) * 0.65
-                )
-                if elapsed >= 10.0 and (rallied or elapsed >= 24.0):
+                elapsed = now - self._regroup_started_at
+                rallied = not combat or self._regroup_fraction >= self.config.regroup_fraction
+                if (
+                    elapsed >= self.config.regroup_min_seconds
+                    and rallied
+                    and not locally_outmatched
+                ):
+                    self._regroup_point = None
+                    self._regroup_home_tag = None
                     self._set_stance(Stance.HOLD, now)
                 else:
-                    reason = "撤退期间先重新集结，不逐帧反复改变方向"
+                    reason = self._retreat_reason + "；等待主力在固定撤退点归队"
             if self.stance == Stance.HOLD:
                 timing_ready = army_supply >= self.config.attack_supply
                 # 未观察到大量敌军时，仍主动出门，不能等敌人先送到门口。
@@ -169,6 +258,9 @@ class Strategist:
                     (timing_ready and ratio >= self.config.attack_ratio) or late_probe or capped
                 )
                 if ready:
+                    # 新一轮进攻不能携带前一轮亏损，也不能用早先拆家的收益抵消新亏损。
+                    self.trade.reset()
+                    self.trade_report = self.trade.update(now, score)
                     self._attack_entry_supply = army_supply
                     self._set_stance(
                         Stance.ATTACK if report.known_structures else Stance.SEARCH, now

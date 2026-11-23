@@ -53,7 +53,7 @@ class CompetitiveBot(BotAI):
     """无参数构造即可参赛；可选 seed 和独立日志路径供中立裁判传入。"""
 
     NAME = "webGPT Bastion"
-    VERSION = "1.0.0"
+    VERSION = "1.1.0"
 
     def __init__(
         self,
@@ -127,6 +127,7 @@ class CompetitiveBot(BotAI):
                         stance=self.plan.stance.value,
                         reason=self.plan.reason,
                         objective=list(self.plan.objective),
+                        engagement=self.strategist.diagnostics(),
                     )
                 self._next_strategy = self.time + self.config.strategy_interval
             report = self.intelligence.report
@@ -163,6 +164,7 @@ class CompetitiveBot(BotAI):
             bases=self.townhalls.amount,
             stance=self.plan.stance.value,
             reason=self.plan.reason,
+            engagement=self.strategist.diagnostics(),
             composition=asdict(self.plan.composition),
             visible_enemies=self.intelligence.report.visible_enemies,
             remembered_contacts=len(self.intelligence.contacts),

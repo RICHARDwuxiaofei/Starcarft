@@ -2,9 +2,11 @@
 
 from types import SimpleNamespace
 
+import pytest
 from bots.webgpt.config import BotConfig
 from bots.webgpt.model import Contact, IntelReport, Stance
 from bots.webgpt.strategy import Strategist, composition_for
+from bots.webgpt.tests.test_engagement import score
 from sc2.ids.unit_typeid import UnitTypeId as U
 from sc2.position import Point2
 
@@ -127,6 +129,8 @@ def test_retreat_has_minimum_duration_and_can_eventually_recover():
     bot.supply_army = 45
     assert strategist.update(bot, intelligence()).stance == Stance.RETREAT
     bot.time += 6
+    assert strategist.update(bot, intelligence()).stance == Stance.RETREAT
+    bot.time += 1
     assert strategist.update(bot, intelligence()).stance == Stance.SEARCH
 
 
@@ -250,3 +254,109 @@ def test_unfinished_forward_expansion_does_not_move_rally_into_danger():
     )
     plan = strategist.update(bot, intelligence())
     assert plan.rally.distance_to(bot.start_location) < 10
+
+
+def losing_push():
+    strategist = Strategist(BotConfig())
+    bot = world(now=500)
+    bot.state = SimpleNamespace(score=score())
+    strategist.update(bot, intelligence())
+    for unit in bot.units:
+        unit.position = Point2((75, 75))
+    bot.time = 510
+    bot.state.score = score(lost_minerals_army=700, killed_minerals_army=100)
+    assert strategist.update(bot, intelligence()).stance == Stance.RETREAT
+    return strategist, bot
+
+
+def test_new_base_does_not_move_a_locked_regroup_destination():
+    strategist, bot = losing_push()
+    locked = Point2(strategist.diagnostics()["regroup_point"])
+    bot.townhalls.append(SimpleNamespace(tag=2, position=Point2((0, 0)), is_flying=False))
+    bot.time += 1
+    # (0, 0) 比原基地更远离敌方，会改变未锁定的 safest；归队点必须仍固定。
+    plan = strategist.update(bot, intelligence())
+    assert plan.fallback == locked
+    assert plan.objective == locked
+
+
+@pytest.mark.parametrize("flies", [True, False])
+def test_lost_or_flying_regroup_base_rebinds_to_remaining_base(flies):
+    strategist, bot = losing_push()
+    old_point = Point2(strategist.diagnostics()["regroup_point"])
+    if flies:
+        bot.townhalls[0].is_flying = True
+    else:
+        bot.townhalls.clear()
+    bot.townhalls.append(SimpleNamespace(tag=2, position=Point2((40, 40)), is_flying=False))
+    bot.time += 20
+    plan = strategist.update(bot, intelligence())
+    assert plan.stance == Stance.RETREAT
+    assert plan.fallback != old_point
+    assert plan.fallback.distance_to(Point2((40, 40))) <= 5.01
+    assert plan.objective == plan.fallback
+
+
+def test_regroup_uses_armed_power_not_headcount_and_has_no_timeout_bypass():
+    strategist, bot = losing_push()
+    home = Point2(strategist.diagnostics()["regroup_point"])
+    bot.units = bot.units[:30]
+    bot.game_data.units[U.SIEGETANK.value] = SimpleNamespace(
+        _proto=SimpleNamespace(food_required=3)
+    )
+    for index, unit in enumerate(bot.units):
+        if index < 21:
+            unit.position = home
+        else:
+            unit.type_id = U.SIEGETANK
+    bot.supply_army = 48
+    bot.time += 30
+    # 70% 的单位数量已到，只有 21/48 的战力到达；不能丢下后排坦克重攻。
+    assert strategist.update(bot, intelligence()).stance == Stance.RETREAT
+    assert strategist.diagnostics()["regroup_fraction"] == pytest.approx(0.438)
+    for unit in bot.units[21:27]:
+        unit.position = home
+    bot.time += 1
+    assert strategist.update(bot, intelligence()).stance == Stance.SEARCH
+    assert not strategist.diagnostics()["regroup_active"]
+    assert strategist.trade_report.loss == 0
+
+
+def test_complete_army_loss_releases_empty_regroup_without_sending_support_to_attack():
+    strategist, bot = losing_push()
+    bot.units.clear()
+    bot.supply_army = 0
+    bot.time += 12
+    plan = strategist.update(bot, intelligence())
+    assert plan.stance == Stance.HOLD
+    assert not strategist.diagnostics()["regroup_active"]
+
+
+def test_regroup_rebinds_after_all_bases_are_lost_then_a_new_base_is_built():
+    strategist, bot = losing_push()
+    bot.townhalls.clear()
+    bot.time += 1
+    assert strategist.update(bot, intelligence()).fallback == bot.start_location
+    bot.townhalls.append(SimpleNamespace(tag=3, position=Point2((40, 40)), is_flying=False))
+    bot.time += 1
+    plan = strategist.update(bot, intelligence())
+    assert plan.stance == Stance.RETREAT
+    assert plan.fallback.distance_to(Point2((40, 40))) <= 5.01
+    assert plan.fallback != bot.start_location
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"trade_window_seconds": float("nan")},
+        {"trade_min_loss": 0},
+        {"trade_loss_ratio": 1},
+        {"regroup_min_seconds": -1},
+        {"regroup_radius": float("inf")},
+        {"regroup_fraction": 0},
+        {"regroup_fraction": 1.1},
+    ],
+)
+def test_invalid_trade_or_regroup_config_fails_before_game_launch(overrides):
+    with pytest.raises(ValueError):
+        BotConfig(**overrides)

@@ -37,6 +37,22 @@ webGPT 的策略、运营决策、战术控制、微操、比赛报告与离线�
 - 库的时间上限会返回 `Tie`，但天然平局也可能返回 `Tie`。报告保留原始结果，不仅凭 `Tie` 就断言超时，更不会将超时判成胜利。
 - `--swap` 交换镜像、人类或指定 Bot 的客户端槽位。内置电脑模式不支持这个选项，因为库要求首位是可加入游戏的 Bot/Human。地图是否按槽位确定物理出生点，仍需实战或回放核对。
 
+## 第一轮复盘迭代新增来源
+
+- 用户明确共享的 [三场复盘索引与 JSON](https://github.com/RICHARDwuxiaofei/Starcarft/blob/e43adf7a4a05a99ab42840dcc0272ea6208b51f7/replays/arena-20261123/README.md)。
+  固定资料提交为 `e43adf7a4a05a99ab42840dcc0272ea6208b51f7`，三场 Bot 基线为 `b301d0b`。
+  时间、坐标、双方损失与证据限制见 [REPLAY_ITERATION.md](REPLAY_ITERATION.md)。
+  只分析这些授权公开比赛资料，没有读取其他参赛者的代码、配置、测试或私人工作区。
+- [Blizzard 计分协议 score.proto](https://github.com/Blizzard/s2client-proto/blob/master/s2clientprotocol/score.proto)：
+  核对 `army` 类包含军事单位而不含工人，`economy` 类含基地/人口建筑/气矿/工人，
+  `technology` 类含生产与研究建筑；累计损失和击杀分数分别按矿、气与类别提供。
+- 隔离环境安装的 `burnysc2==7.3.0` 的 `score.py`、`client.py`、`game_state.py`、`unit.py`：
+  核对 `ScoreDetails` 属性、加入游戏时的 `score=True`、真实观察包装和移动指令接口。
+  这是通用客户端接口查阅，不涉及示例或第三方战术实现。
+
+30 秒、600 资源、1.8 倍交换门槛及 12 秒/70%/16 距离的重整条件是本轮自行设计的启发式，
+并非 Blizzard 的建议参数，也未从聚类汇总还原出实际逐秒决策。矿物与瓦斯暂按 1:1 合计。
+
 ## 验证边界
 
 云端开发期间只执行语法、导入、静态检查和离线模拟测试，未调用用户台式机或笔记本，未启动真实 SC2。测试中的游戏状态、对手、API 返回值和回放字节均为构造数据；它们验证代码契约与异常处理，不能证明真实地图加载、游戏运行、战术强度或胜率。

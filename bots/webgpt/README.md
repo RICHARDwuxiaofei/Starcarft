@@ -1,13 +1,15 @@
 # webGPT Bastion — 原创人族对战 Bot
 
-这是 `webGPT` 分支的完整参赛实现。统一入口为
+这是从三场实战基线 `b301d0b` 建立的 `webGPT-replay-iteration` 分支，版本 **1.1.0**。统一入口为
 `bots.webgpt.bot:CompetitiveBot`，继承 `sc2.bot_ai.BotAI`，使用 **burnysc2 7.3.0**。
 
 战术主轴是**持续扩张的生化部队 + 坦克阵地**，以医疗运输机维持续航，根据侦察结果补维京和渡鸦。
 没有接入在线大模型；开发完成后，比赛中的决策由这些 Python 模块在本地执行。
 
-**目前完成了云端离线验证，没有运行真实 SC2 比赛。** 测试记录见 [VALIDATION.md](VALIDATION.md)，
-本项目不会把通过测试解释成战术强度、胜率或已经击败任何 Agent。
+**基线在用户提供的三场实战中均获胜；本轮修改只完成云端离线验证，尚未实战。**
+本轮针对优势推进中的不利交换加入止损与固定地点重整，证据、时间与判断边界见
+[REPLAY_ITERATION.md](REPLAY_ITERATION.md)，实际检查见 [VALIDATION.md](VALIDATION.md)。
+基线的胜绩不归属于新版本，离线测试也不代表战术强度或胜率。
 
 ## 原创及隔离
 
@@ -16,8 +18,9 @@
 > 不准抄别人，可以查资料和机制，以及最新的官方更新日志什么的。
 
 本轮没有读取 mizuki 或其他参赛者的实现，也没有采用第三方 Bot、示例 Bot 或现成战术框架。
-查询范围是游戏机制、Blizzard 官方补丁、SC2 协议和 burnysc2 库接口；详见 [SOURCES.md](SOURCES.md)。
-所有 Bot 文件都在 `bots/webgpt/`，分支是 `webGPT`。开发与检查在云端完成，没有调用用户电脑。
+查询范围是用户授权共享的复盘、游戏机制、Blizzard 官方补丁、SC2 协议和 burnysc2 库接口；
+详见 [SOURCES.md](SOURCES.md)。所有本轮改动均在 `bots/webgpt/`，分支是 `webGPT-replay-iteration`。
+开发与检查在云端完成，没有调用用户电脑。
 
 ## 实现了什么
 
@@ -30,6 +33,7 @@
 | 科技 | 轨道指挥部、刺激剂、战斗盾牌、震撼弹、生化攻防和机械攻防；实际可用技能与价格由客户端查询 |
 | 情报 | SCV 侦察、按最后看见的时间衰减记忆、隐形科技预警；雾中快照不能当作当前可打击目标 |
 | 战略 | 集结、回防、进攻、撤退、搜索五个状态，进退有迟滞；敌情未知时也会主动寻找目标 |
+| 交换与重整 | 用本玩家分数监测近期军事损失和全部击杀收益；撤退锁定归队点，达到最短时间与战力归队比例才恢复进攻 |
 | 生化微操 | 目标优先级、射程与冷却驱动的风筝、刺激剂条件判断、范围危险躲避 |
 | 坦克 | 根据接敌距离架起，接触消失后收起，处理最小射程及撤退，避免不断架收 |
 | 空军支援 | 医疗机治疗分摊和防空避险；维京应对空军/巨像并在合适条件下落地收尾；渡鸦探测护航 |
@@ -63,9 +67,9 @@ py -3.12 -m venv .venv
 
 ```powershell
 Set-Location D:\CODE\Starcarft
-git fetch origin webGPT
-git worktree add -b play/webGPT D:\CODE\Starcarft-agent-worktrees\webGPT origin/webGPT
-Set-Location D:\CODE\Starcarft-agent-worktrees\webGPT
+git fetch origin webGPT-replay-iteration
+git worktree add -b play/webGPT-replay-iteration D:\CODE\Starcarft-agent-worktrees\webGPT-replay-iteration origin/webGPT-replay-iteration
+Set-Location D:\CODE\Starcarft-agent-worktrees\webGPT-replay-iteration
 & D:\CODE\Starcarft\.venv\Scripts\python.exe -m bots.webgpt.run --check --sc2-path "C:\baoxue\StarCraft II"
 ```
 
@@ -136,6 +140,11 @@ python -m bots.webgpt.run --opponent-bot bots.other.bot:CompetitiveBot --opponen
 - `编号_webgpt.jsonl`：每10游戏秒的经济/军队/决策快照，以及状态转换、错误和终局事件。
 - `编号.SC2Replay`：只有客户端实际保存成功才会存在；不会生成假回放或把文件名当作成功证据。
 
+本轮在 `stance` 和 `snapshot` 中增加 `engagement` 字段，记录近期军队损失、击杀收益、
+统计跨度、止损次数、锁定重整点、归队战力比例及最近一次止损的证据。
+中立裁判直接构造 Bot 时，应传入本方独立的 `telemetry_path`，才会保存这些日志；默认构造不写文件。
+这些分数来自本玩家全局观察，不能区分同一时间的多个战场。详见复盘文档中的指标说明。
+
 进程退出码：`0`为有效结果且回放非空；`1`为脚本/游戏/结果异常；`2`为配置或环境问题；
 `3`为取得结果但未保存有效回放；`130`为用户中断。平局或达到游戏时限不记作胜利。
 如果进程被外部强杀，报告可能停在 `STARTING/RUNNING`，这不是终局结果。
@@ -151,6 +160,7 @@ python -m bots.webgpt.run --opponent-bot bots.other.bot:CompetitiveBot --opponen
 | `config.py` | 决策频率、工人数上限、进退阈值与情报记忆时长 |
 | `intelligence.py` | 侦察证据、记忆衰减、威胁分类与搜索路径 |
 | `strategy.py` | 出击条件、基地/生产规模、应对敌军的兵种比例 |
+| `engagement.py` | 正常计分观察的滚动交换统计、窗口过期和数据异常处理 |
 | `macro.py` | 建造优先级、预留资源、附件、升级与出兵 |
 | `economy.py` | SCV 采矿、修理、侦察和逃生 |
 | `combat.py` | 单位级微操、集火、坦克、支援机、范围危险 |
@@ -182,4 +192,5 @@ python -m compileall -q bots/webgpt
 ```
 
 测试不要求 SC2 安装，也不启动游戏。完整流程测试使用真实库对象和合成观察，只替换客户端查询。
-本分支的 GitHub Actions 也只运行这些检查；后续实战要单独记录版本、场次、回放和胜负。
+继承的 GitHub Actions 推送过滤器只匹配原 `webGPT` 分支，本轮未修改工作流，也不把新分支
+推送等同于 CI 通过。本轮检查在云端隔离环境实际执行；实战由用户统一安排并另行记录结果。
