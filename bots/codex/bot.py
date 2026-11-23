@@ -41,6 +41,7 @@ CLOAK_TECH = {
     U.WIDOWMINEBURROWED,
 }
 AIR_TRANSFORMERS = {U.VIKINGFIGHTER, U.LIBERATOR, U.BANSHEE, U.BROODLORD}
+SIEGE_BUFFER = 14
 
 
 def offset(point, x, y):
@@ -916,6 +917,37 @@ class CompetitiveBot(BotAI):
         self.sweep_goal = None
         self.reinforce_point = None
 
+    @staticmethod
+    def _under_siege(point, siege):
+        return any(tank.distance_to_squared(point) <= SIEGE_BUFFER**2 for tank in siege)
+
+    def _siege_fallback(self, rally, siege):
+        closest = min(siege, key=lambda tank: (tank.distance_to_squared(rally), tank.tag)).position
+        home = self._home()
+        area = self.game_info.playable_area
+        away_x, away_y = rally.x - closest.x, rally.y - closest.y
+        # Search on the friendly side of the line rather than walking through enemy splash.
+        for distance in (0, 4, 8, 12, 16, 20):
+            candidates = (
+                offset(rally, dx * distance, dy * distance)
+                for dx, dy in ((0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1))
+            )
+            safe = [
+                p
+                for p in candidates
+                if area.x <= p.x < area.right
+                and area.y <= p.y < area.top
+                and (p.x - rally.x) * away_x + (p.y - rally.y) * away_y >= 0
+                and not self._under_siege(p, siege)
+                and all(point_distance_squared(p, base) >= 3.5**2 for base in self.zones)
+                and self.in_pathing_grid(p)
+            ]
+            if safe:
+                return min(
+                    safe, key=lambda p: (point_distance_squared(p, rally), point_distance_squared(p, home), p)
+                )
+        return self._rally()
+
     def _set_mode(self, force, local, opposition, pressured, cohesion, scaled):
         if self.mode == "push":
             self.push_peak = max(self.push_peak, force)
@@ -974,24 +1006,35 @@ class CompetitiveBot(BotAI):
         self.attack_destination = self._attack_goal(center) if pushing else None
         goal = self.attack_destination if pushing else rally
         reinforce = self._reinforcement_rally(center, ground) if pushing and ground else center
-        bound = self._garrison(army)
+        siege = [u for u in self.raiders if u.type_id == U.SIEGETANKSIEGED]
+        bound = self._garrison(army, siege=siege)
         frontline = [u for u in ground if u.tag not in bound]
+        fallback = self._siege_fallback(rally, siege) if siege else None
+        support = [u for u in frontline if not self._under_siege(u.position, siege)] if siege else frontline
+        intruder = min(self.raiders, key=lambda e: (e.distance_to_squared(rally), e.tag)) if pressed else None
 
         for unit in army:
             if unit.tag in bound:
                 continue
-            destination = reinforce if pushing and self._trailing(unit, center, goal) else goal
-            if pressed and unit.type_id not in TANKS and self.raiders:
-                intruder = min(self.raiders, key=lambda e: (e.distance_to_squared(rally), e.tag))
-                if intruder.can_be_attacked and (
-                    unit.can_attack_air if intruder.is_flying else unit.can_attack_ground
-                ):
-                    destination = intruder.position
             nearby = [e for e in self.visible if e.distance_to_squared(unit) < 15**2]
+            if fallback is not None and not unit.is_flying and unit.type_id not in TANKS:
+                if self._under_siege(unit.position, siege):
+                    self._issue(unit, A.MOVE, fallback)
+                else:
+                    self._fighter(unit, nearby, fallback, center, hold_position=True)
+                continue
+            destination = reinforce if pushing and self._trailing(unit, center, goal) else goal
+            if (
+                intruder is not None
+                and unit.type_id not in TANKS
+                and intruder.can_be_attacked
+                and (unit.can_attack_air if intruder.is_flying else unit.can_attack_ground)
+            ):
+                destination = intruder.position
             if unit.type_id in TANKS:
                 self._tank(unit, nearby, destination, frontline)
             elif unit.type_id == U.MEDIVAC:
-                self._medivac(unit, frontline, center)
+                self._medivac(unit, support, center, hold=fallback)
             else:
                 self._fighter(unit, nearby, destination, center)
 
@@ -1025,7 +1068,7 @@ class CompetitiveBot(BotAI):
             return
         self._fighter(tank, nearby, destination, destination)
 
-    def _fighter(self, unit, nearby, destination, center):
+    def _fighter(self, unit, nearby, destination, center, *, hold_position=False):
         enemies = [
             e
             for e in nearby
@@ -1049,7 +1092,7 @@ class CompetitiveBot(BotAI):
             and nearest.distance_to_squared(unit) < 9**2
             and (withdrawing or unit.health_percentage < 0.34)
         ):
-            point = destination if withdrawing else self._rally()
+            point = destination if withdrawing or hold_position else self._rally()
             self._issue(unit, A.MOVE, point, repeat=0.65)
             return
         if in_range:
@@ -1073,6 +1116,7 @@ class CompetitiveBot(BotAI):
                     return
             if (
                 nearest
+                and not hold_position
                 and not unit.is_flying
                 and unit.type_id in BIO
                 and unit.weapon_cooldown > 2
@@ -1094,10 +1138,15 @@ class CompetitiveBot(BotAI):
                 self._issue(unit, A.ATTACK, air)
             else:
                 self._issue(unit, A.MOVE, center.towards(self._rally(), 4))
+        elif hold_position:
+            if unit.distance_to_squared(destination) > 2.5**2:
+                self._issue(unit, A.MOVE, destination)
+            else:
+                self._issue(unit, A.HOLDPOSITION)
         elif unit.distance_to_squared(destination) > 2.5**2 or (enemies and self.mode == "push"):
             self._issue(unit, A.MOVE if withdrawing else A.ATTACK, destination)
 
-    def _medivac(self, medic, frontline, center):
+    def _medivac(self, medic, frontline, center, *, hold=None):
         wounded = [
             u
             for u in frontline
@@ -1107,17 +1156,21 @@ class CompetitiveBot(BotAI):
         ]
         danger = [e for e in self.hostiles if e.can_attack_air and e.distance_to_squared(medic) < 7**2]
         if danger and medic.health_percentage < 0.56:
-            self._issue(medic, A.MOVE, self._rally())
+            self._issue(medic, A.MOVE, hold if hold is not None else self._rally())
         elif wounded and medic.energy >= 3:
             target = min(wounded, key=lambda u: (u.health_percentage, u.distance_to_squared(medic), u.tag))
             self._issue(medic, A.MEDIVACHEAL_HEAL, target, repeat=0.9)
         else:
             anchor = center if frontline else self._rally()
-            trail = anchor.towards(self._rally(), min(4, anchor.distance_to(self._rally())))
+            trail = (
+                hold
+                if hold is not None
+                else anchor.towards(self._rally(), min(4, anchor.distance_to(self._rally())))
+            )
             if medic.distance_to_squared(trail) > 3**2:
                 self._issue(medic, A.MOVE, trail)
 
-    def _garrison(self, army):
+    def _garrison(self, army, *, siege=()):
         bound = set()
         for bunker in sorted(self.structures(U.BUNKER).ready, key=lambda u: u.tag):
             nearby = [e for e in self.raiders if e.distance_to_squared(bunker) < 14**2]
@@ -1128,7 +1181,7 @@ class CompetitiveBot(BotAI):
             if bunker.health_percentage < 0.18 and bunker.cargo_used:
                 self._issue(bunker, A.UNLOADALL_BUNKER)
                 continue
-            if bunker.cargo_left > 0:
+            if bunker.cargo_left > 0 and not self._under_siege(bunker.position, siege):
                 candidates = [
                     u for u in army if u.type_id == U.MARINE and u.distance_to_squared(bunker) < 8**2
                 ]

@@ -585,6 +585,50 @@ class ArenaTests(unittest.IsolatedAsyncioTestCase):
         await b.on_step(1)
         self.assertIn(A.UNSIEGE_UNSIEGE, b.abilities)
 
+    async def test_siege_defense_withdraws_exposed_infantry_and_keeps_counter_tank(self):
+        b = self.bot
+        b.next_macro = inf
+        b.frame(510)
+        hostile = b.unit(U.SIEGETANKSIEGED, 620, Point2((47, 32)))
+        exposed = b.unit(U.MARINE, 201, Point2((38, 32)), health=21)
+        counter = b.unit(U.SIEGETANK, 202, Point2((38, 34)))
+        medic = b.unit(U.MEDIVAC, 203, Point2((38, 32)), is_flying=True, energy=20)
+        b.observation(army=[exposed, counter, medic], buildings=[self.home()], enemies=[hostile])
+        await b.on_step(0)
+
+        orders = {a.unit.tag: a for a in b.actions}
+        self.assertEqual(orders[exposed.tag].ability, A.MOVE)
+        hold = orders[exposed.tag].target
+        self.assertGreater(hostile.distance_to(hold), 14)
+        self.assertEqual(orders[counter.tag].ability, A.SIEGEMODE_SIEGEMODE)
+        self.assertEqual((orders[medic.tag].ability, orders[medic.tag].target), (A.MOVE, hold))
+
+        b.frame(511)
+        arrived = b.unit(U.MARINE, exposed.tag, hold, order=(A.ATTACK, hostile.tag))
+        b.observation(army=[arrived], buildings=[self.home()], enemies=[hostile])
+        await b.on_step(1)
+        self.assertEqual(b.abilities, [A.HOLDPOSITION])
+
+    async def test_siege_defense_allows_safe_local_fire_and_releases_after_unsiege(self):
+        b = self.bot
+        b.next_macro = inf
+        b.frame(510)
+        hostile = b.unit(U.SIEGETANKSIEGED, 620, Point2((47, 32)))
+        exposed = b.unit(U.MARINE, 201, Point2((38, 32)))
+        guard = b.unit(U.MARINE, 202, Point2((29, 30)))
+        attacker = b.unit(U.MARINE, 621, Point2((28, 34)))
+        b.observation(army=[exposed, guard], buildings=[self.home()], enemies=[hostile, attacker])
+        await b.on_step(0)
+        orders = {a.unit.tag: a for a in b.actions}
+        self.assertEqual(orders[exposed.tag].ability, A.MOVE)
+        self.assertEqual((orders[guard.tag].ability, orders[guard.tag].target.tag), (A.ATTACK, attacker.tag))
+
+        b.frame(513)
+        moving_tank = b.unit(U.SIEGETANK, hostile.tag, hostile.position)
+        b.observation(army=[exposed], buildings=[self.home()], enemies=[moving_tank])
+        await b.on_step(1)
+        self.assertEqual([(a.ability, a.target) for a in b.actions], [(A.ATTACK, hostile.position)])
+
     async def test_worker_evacuates_to_safe_minerals_under_attack(self):
         b = self.bot
         b.next_macro = inf
