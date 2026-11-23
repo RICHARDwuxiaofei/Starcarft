@@ -65,6 +65,7 @@ def test_two_bays_do_not_order_the_same_upgrade():
     fake = SimpleNamespace(
         state=SimpleNamespace(upgrades=set()),
         _queued_upgrades=set(),
+        unit_tags_received_action=set(),
         already_pending_upgrade=lambda _: 0,
         can_afford=lambda _: True,
     )
@@ -87,6 +88,8 @@ def test_skips_blocked_expansion_tile_without_stalling():
         start_location=start,
         expansion_locations_list=[third, natural, start],
         _blocked_expansions={},
+        _expansion_threats=[],
+        enemy_start_locations=[],
         time=121,
         can_place_single=AsyncMock(side_effect=[False, True]),
         _candidate_builders=lambda _: [worker],
@@ -112,6 +115,8 @@ def test_frame_dispatch_only_directs_visible_units(monkeypatch):
         _orbitals=Mock(),
         _depot_control=Mock(),
         _macro=AsyncMock(),
+        _track_base_losses=Mock(),
+        _update_expansion_risk=Mock(),
     )
     combat = AsyncMock()
     monkeypatch.setattr(module, "control_combat", combat)
@@ -119,6 +124,8 @@ def test_frame_dispatch_only_directs_visible_units(monkeypatch):
     agent._signals.assert_called_once_with([contact], [])
     agent._scout.assert_called_once_with([contact])
     agent._macro.assert_awaited_once_with(signals)
+    agent._track_base_losses.assert_called_once_with()
+    agent._update_expansion_risk.assert_called_once_with([contact], [])
     combat.assert_awaited_once_with(agent, 0)
 
 
@@ -181,3 +188,107 @@ def test_addon_reserves_correct_gas_and_minerals_before_followup_orders():
     assert (agent.minerals, agent.vespene) == (0, 0)
     agent.calculate_cost.assert_called_with(U.REACTOR)
     building.assert_called_once_with(A.BUILD_REACTOR_BARRACKS)
+
+
+def test_threatened_or_recently_lost_pad_is_not_replanted_under_fog():
+    from bots.mizuki.bot import Contact
+
+    main, natural = Point2((19, 32)), Point2((41, 19))
+    exposed, covered, remote = Point2((38, 60)), Point2((15, 12)), Point2((80, 72))
+    halls = [SimpleNamespace(position=p) for p in (main, natural)]
+    worker = Mock(tag=7, position=main)
+    worker.build.return_value = True
+    fake = SimpleNamespace(
+        townhalls=halls,
+        start_location=main,
+        enemy_start_locations=[Point2((110, 90))],
+        expansion_locations_list=[main, natural, exposed, covered, remote],
+        _blocked_expansions={},
+        _expansion_threats=[],
+        _seen_halls={12: exposed},
+        time=384.95,
+        state=SimpleNamespace(dead_units={12}),
+        can_place_single=AsyncMock(return_value=True),
+        _candidate_builders=lambda _: [worker],
+        client=SimpleNamespace(query_pathing=AsyncMock(return_value=23)),
+    )
+    for i, hall in enumerate(halls):
+        hall.tag, hall.is_flying = i + 1, False
+    visible_marine = SimpleNamespace(
+        can_attack_ground=True, type_id=U.MARINE, position=exposed.offset((6, 2))
+    )
+    CompetitiveBot._update_expansion_risk(fake, [visible_marine], [])
+    CompetitiveBot._track_base_losses(fake)
+    assert fake._blocked_expansions[exposed] > 456.38
+    fake.time += 16
+    CompetitiveBot._update_expansion_risk(fake, [], [])
+    assert fake._expansion_threats == [Contact(visible_marine.position, 384.95)]
+    assert asyncio.run(CompetitiveBot._expand(fake, halls))
+    fake.can_place_single.assert_awaited_once_with(U.COMMANDCENTER, covered)
+    worker.build.assert_called_once_with(
+        U.COMMANDCENTER, covered, can_afford_check=True
+    )
+    fake.time += 16
+    CompetitiveBot._update_expansion_risk(fake, [], [])
+    assert not fake._expansion_threats
+
+
+def test_research_never_overwrites_order_sent_to_same_lab_this_frame():
+    fake = SimpleNamespace(unit_tags_received_action={9})
+    lab = Mock(tag=9)
+    assert not CompetitiveBot._research(fake, lab, (Up.COMBATSHIELD,))
+    lab.research.assert_not_called()
+
+
+def test_two_base_expansion_needs_workers_and_can_start_before_6_minutes():
+    opening = Signals(260, 2, 19, 0, 0, 0, False)
+    assert expansion_allowed(opening, saturated=True)
+    assert not expansion_allowed(opening)
+    assert not expansion_allowed(replace(opening, local_pressure=5), saturated=True)
+
+
+def test_priority_stim_waits_for_first_tank_and_checks_attachment():
+    two_bases = Signals(245, 2, 20, 0, 0, 0, False)
+    attached, orphan = SimpleNamespace(tag=5), SimpleNamespace(tag=4)
+    labs = SimpleNamespace(ready=SimpleNamespace(idle=[orphan, attached]))
+    rax = SimpleNamespace(ready=[SimpleNamespace(add_on_tag=5)])
+    fake = SimpleNamespace(
+        structures=lambda kind: labs if kind == U.BARRACKSTECHLAB else rax,
+        units=lambda _: [],
+        _pending=Mock(return_value=0),
+        _stim_underway=Mock(return_value=False),
+        state=SimpleNamespace(upgrades=set()),
+        already_pending_upgrade=lambda _: 0,
+        unit_tags_received_action=set(),
+    )
+    assert CompetitiveBot._priority_bio_upgrade(fake, two_bases) is None
+    fake._pending.return_value = 1
+    assert CompetitiveBot._priority_bio_upgrade(fake, two_bases) == (
+        attached,
+        Up.STIMPACK,
+    )
+    fake.unit_tags_received_action.add(5)
+    assert CompetitiveBot._priority_bio_upgrade(fake, two_bases) is None
+
+
+def test_waiting_for_upgrade_gas_keeps_producing_only_surplus_marines():
+    rax = [
+        SimpleNamespace(tag=i, orders=[], has_reactor=False, add_on_tag=0)
+        for i in (1, 2)
+    ]
+    fake = SimpleNamespace(
+        minerals=170,
+        calculate_cost=lambda item: SimpleNamespace(
+            minerals=50 if item == U.MARINE else 100
+        ),
+    )
+
+    def train(*_args, **_kwargs):
+        fake.minerals -= 50
+        return True
+
+    fake._train = Mock(side_effect=train)
+    supply = {"left": 4}
+    CompetitiveBot._train_surplus_marines(fake, rax, supply, Up.STIMPACK)
+    fake._train.assert_called_once_with(rax[0], U.MARINE, supply, queue=False)
+    assert fake.minerals == 120

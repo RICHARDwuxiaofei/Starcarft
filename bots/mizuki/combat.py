@@ -78,6 +78,12 @@ class _CombatState:
     core_anchor: Point2 | None = None
 
 
+@dataclass(frozen=True)
+class _SiegeGuard:
+    rally: Point2
+    guns: tuple[Unit, ...]
+
+
 def _center(group: list[Unit], fallback: Point2) -> Point2:
     if not group:
         return fallback
@@ -386,6 +392,185 @@ def _defense(
         return None
     _, _, anchor, enemies = max(options, key=lambda entry: entry[:2])
     return anchor, enemies
+
+
+def _inside_siege(point: Point2, guns: tuple[Unit, ...], padding: float = 0.8) -> bool:
+    return any(
+        gun.distance_to(point) < max(13, gun.ground_range) + gun.radius + padding
+        for gun in guns
+    )
+
+
+def _siege_guard(
+    bot: BotAI, enemies: list[Unit], ground: list[Unit], core: Point2, home: Point2
+) -> _SiegeGuard | None:
+    """Defend on our side of a visible, materially stronger deployed tank line."""
+    deployed = [e for e in enemies if e.type_id == U.SIEGETANKSIEGED]
+    if not deployed or not ground:
+        return None
+    candidates = []
+    for base in bot.townhalls:
+        if base.is_flying:
+            continue
+        guns = tuple(
+            sorted(
+                (e for e in deployed if e.distance_to(base) <= 23),
+                key=lambda e: (e.distance_to(base), e.tag),
+            )
+        )
+        if not guns:
+            continue
+        frontline = guns[0]
+        allied = [
+            u for u in ground if u.distance_to(base) <= 18 and u.distance_to(core) <= 15
+        ]
+        armor = sum(u.type_id in _TANKS for u in allied)
+        enemy = [
+            e
+            for e in enemies
+            if not e.is_flying and _danger(e) and e.distance_to(frontline) <= 12
+        ]
+        own_power, enemy_power = _strength(allied), _strength(enemy)
+        # A genuinely concentrated advantage may counterattack. A distant reserve
+        # doesn't count as covering units already beneath the opposing guns.
+        if len(guns) == 1:
+            holding = armor == 0 and (own_power < 6 or enemy_power > own_power)
+        else:
+            covering_tank = any(
+                u.type_id in _TANKS
+                and u.health_percentage >= 0.45
+                and u.distance_to(core) <= 9
+                for u in allied
+            )
+            can_trade = armor >= len(guns) and own_power >= enemy_power * 1.15
+            supported_push = (
+                len(guns) <= 3
+                and covering_tank
+                and len(allied) - armor >= 9
+                and own_power >= enemy_power * 1.55
+            )
+            massed_infantry = (
+                len(guns) <= 2 and len(allied) >= 14 and own_power >= enemy_power * 2.2
+            )
+            holding = not (can_trade or supported_push or massed_infantry)
+        if holding:
+            rank = (
+                len(guns),
+                -frontline.distance_to(base),
+                -base.distance_to(core),
+                -base.tag,
+            )
+            candidates.append((rank, base.position, guns))
+    if not candidates:
+        return None
+    _, base, guns = max(candidates, key=lambda entry: entry[0])
+    frontline = guns[0].position
+    dx, dy = base.x - frontline.x, base.y - frontline.y
+    length = hypot(dx, dy)
+    if length == 0:
+        dx, dy = home.x - frontline.x, home.y - frontline.y
+        length = hypot(dx, dy)
+    if length == 0:
+        dx, dy, length = 1.0, 0.0, 1.0
+    dx, dy = dx / length, dy / length
+    # Project behind the threatened base rather than aiming at the siege tanks.
+    # Try sideways offsets for ramps, minerals and map edges.
+    options = [
+        Point2((base.x + dx * depth - dy * lane, base.y + dy * depth + dx * lane))
+        for depth in (4, 7, 10, 14, 18)
+        for lane in (0, 4, -4, 8, -8)
+    ]
+    safe = [
+        p
+        for p in (*options, home)
+        if _inside(bot, p)
+        and bot.in_pathing_grid(p)
+        and not _inside_siege(p, guns, 1.4)
+    ]
+    if not safe:
+        # The existing home is preferable to the enemy line even if it is exposed.
+        return _SiegeGuard(home, guns)
+    rally = min(
+        safe, key=lambda p: (p.distance_to(base) + 0.18 * p.distance_to(core), p.x, p.y)
+    )
+    return _SiegeGuard(rally, guns)
+
+
+def _guard_line(
+    bot: BotAI,
+    state: _CombatState,
+    now: float,
+    unit: Unit,
+    enemies: list[Unit],
+    guard: _SiegeGuard,
+) -> None:
+    rally, guns = guard.rally, guard.guns
+    threatening = min(guns, key=lambda e: (unit.distance_to(e), e.tag))
+    exposed = _inside_siege(unit.position, guns, unit.radius + 0.35)
+    target, in_range = _select(
+        unit, enemies, max_distance=15 if unit.type_id in _TANKS else 10
+    )
+    if unit.type_id == U.SIEGETANKSIEGED:
+        if (
+            target
+            and in_range
+            and (
+                not exposed
+                or unit.health_percentage >= 0.32
+                or unit.weapon_cooldown <= 0
+            )
+        ):
+            _send(state, now, unit, "attack", target)
+            return
+        if exposed or unit.distance_to(rally) > 10:
+            _send(state, now, unit, AbilityId.UNSIEGE_UNSIEGE)
+        return
+    if not exposed and target and in_range:
+        _send(state, now, unit, "attack", target)
+        return
+    if (
+        not exposed
+        and unit.type_id == U.SIEGETANK
+        and unit.distance_to(rally) <= 5
+        and unit.distance_to(threatening) <= 18
+    ):
+        _send(state, now, unit, AbilityId.SIEGEMODE_SIEGEMODE)
+        return
+
+    # Offset the fallback across the front instead of stacking infantry on one
+    # artillery splash target. A pathable rally is the secondary choice.
+    angle_x, angle_y = (
+        rally.x - threatening.position.x,
+        rally.y - threatening.position.y,
+    )
+    axis = hypot(angle_x, angle_y) or 1.0
+    lane = ((unit.tag % 5) - 2) * 1.6
+    offset = Point2((rally.x - angle_y * lane / axis, rally.y + angle_x * lane / axis))
+    if (
+        not _inside(bot, offset)
+        or not bot.in_pathing_grid(offset)
+        or _inside_siege(offset, guns)
+    ):
+        offset = rally
+    distance = unit.distance_to(offset)
+    if distance > 2:
+        first_step = unit.position.towards(offset, min(distance, 3.5))
+        if exposed and first_step.distance_to(threatening.position) < unit.distance_to(
+            threatening
+        ):
+            offset = _away(bot, unit, threatening, 5) or offset
+        elif not exposed and any(
+            _inside_siege(unit.position.towards(offset, distance * factor), guns)
+            for factor in (0.25, 0.5, 0.75)
+        ):
+            # Stay out of the firing arc rather than crossing it to touch a marker.
+            if not unit.is_idle:
+                _send(state, now, unit, AbilityId.HOLDPOSITION_HOLD)
+            return
+        _send(state, now, unit, "move", offset)
+    elif not unit.is_idle:
+        # Cancel an old target order; no out-of-range chase from the defensive line.
+        _send(state, now, unit, AbilityId.HOLDPOSITION_HOLD)
 
 
 def _next_phase(
@@ -955,6 +1140,7 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
     if any(e.is_flying and (_danger(e) or e.is_structure) for e in enemies):
         state.last_air_seen = now
     defense = _defense(bot, enemies, center)
+    siege_guard = _siege_guard(bot, enemies, ground, center, home)
     local_contacts = [e for e in enemies if e.distance_to(center) <= 18]
     local_air = [u for u in army if u.is_flying and u.distance_to(center) < 13]
     if local_contacts and all(e.is_flying for e in local_contacts):
@@ -971,8 +1157,9 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
         center.distance_to(home),
         sum(not h.is_flying for h in bot.townhalls),
     )
-    withdrawing = phase == _Phase.RETREAT and defense is None
-    pressure = phase == _Phase.PRESSURE and defense is None
+    defending = defense is not None or siege_guard is not None
+    withdrawing = phase == _Phase.RETREAT and not defending
+    pressure = phase == _Phase.PRESSURE and not defending
     committing = defense is not None or pressure
     floating_cleanup = (
         [e for e in enemies if e.is_structure and e.is_flying]
@@ -981,7 +1168,9 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
     )
     goal = home
     contacts = enemies
-    if defense is not None:
+    if siege_guard is not None:
+        goal = siege_guard.rally
+    elif defense is not None:
         anchor, attackers = defense
         goal = min(attackers, key=lambda e: (e.distance_to(anchor), e.tag)).position
         contacts = [
@@ -1028,6 +1217,9 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
     for unit in army:
         if _evade(bot, state, now, unit, zones):
             continue
+        if siege_guard is not None and not unit.is_flying:
+            _guard_line(bot, state, now, unit, contacts, siege_guard)
+            continue
         if unit.type_id in _TANKS:
             _tank(state, now, unit, contacts, goal, withdrawing)
         elif unit.type_id in _BIO:
@@ -1052,16 +1244,26 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
                 now,
                 unit,
                 contacts,
-                center,
+                siege_guard.rally if siege_guard else center,
                 goal,
                 withdrawing=withdrawing,
-                committing=committing,
+                committing=committing and siege_guard is None,
                 has_ground=has_ground,
                 floating_cleanup=floating_cleanup,
             )
     for unit in air_support:
         if _evade(bot, state, now, unit, zones):
             continue
+        escort_center = siege_guard.rally if siege_guard else center
+        escort_goal = siege_guard.guns[0].position if siege_guard else goal
         _air_support(
-            bot, state, now, unit, army, anti_air, center, goal, withdrawing=withdrawing
+            bot,
+            state,
+            now,
+            unit,
+            army,
+            anti_air,
+            escort_center,
+            escort_goal,
+            withdrawing=withdrawing,
         )

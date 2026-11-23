@@ -20,6 +20,7 @@ from .policy import (
     desired_refineries,
     desired_workers,
     expansion_allowed,
+    expansion_site_rank,
     protect_natural,
     supply_order_count,
     surplus_gas,
@@ -97,9 +98,12 @@ class CompetitiveBot(BotAI):
         self._scout_ordered = -99.0
         self._next_build: dict[U, float] = {}
         self._blocked_expansions: dict[Point2, float] = {}
+        self._expansion_threats: list[Contact] = []
+        self._seen_halls: dict[int, Point2] = {}
         self._queued_upgrades: set[Up] = set()
         self._seen_air: dict[int, tuple[float, float]] = {}
         self._armor_until = 0.0
+        self._siege_until = 0.0
         self._cloak_until = 0.0
         self._scan_last = -99.0
         self._worker_sightings: dict[int, tuple[float, Point2]] = {}
@@ -160,7 +164,9 @@ class CompetitiveBot(BotAI):
             self._scout(contacts)
             self._orbitals(contacts, state)
             self._depot_control(contacts)
+        self._track_base_losses()
         if iteration % 3 == 0:
+            self._update_expansion_risk(contacts, structures)
             await self._macro(state)
         await control_combat(self, iteration)
         trace = getattr(self, "_trace", None)
@@ -223,6 +229,8 @@ class CompetitiveBot(BotAI):
         self._seen_air = {
             tag: val for tag, val in self._seen_air.items() if now - val[0] <= 55
         }
+        if any(u.type_id in {U.SIEGETANK, U.SIEGETANKSIEGED} for u in contacts):
+            self._siege_until = now + 80
         if sum(u.is_armored for u in contacts if u.can_attack and not u.is_flying) >= 3:
             self._armor_until = now + 50
         if any(
@@ -674,21 +682,39 @@ class CompetitiveBot(BotAI):
             opening_cover=min(2, self._pending(U.MARINE)),
             retry_ok=self.time >= self._natural_retry_at,
         )
-        expanding = (
-            recovering
-            or bank_natural
-            or (s.bases >= 2 and expansion_allowed(s) and not pending_cc)
+        emergency = s.local_pressure >= 5
+        # Give the first infantry upgrades a chance before discretionary tech or
+        # reinforcements. Keep minimum worker, supply and emergency spending alive.
+        bio_research = (
+            self._priority_bio_upgrade(s)
+            if s.bases >= 2
+            and s.army_supply >= 10
+            and not bank_natural
+            and not emergency
+            else None
         )
+        saturated = (
+            len(townhalls) >= 2 and self.supply_workers >= 15 * len(townhalls) + 4
+        )
+        banking_later = (
+            not pending_cc
+            and s.bases >= 2
+            and expansion_allowed(s, saturated=saturated)
+            and not (bio_research and bio_research[1] == Up.STIMPACK)
+            and self.time >= self._natural_retry_at
+        )
+        expanding = recovering or bank_natural or banking_later
+        started_expansion = False
         if (
             expanding
             and self.can_afford(U.COMMANDCENTER)
             and self.time >= self._next_build.get(U.COMMANDCENTER, 0)
         ):
             self._next_build[U.COMMANDCENTER] = self.time + 3.0
-            started = await self._expand(townhalls)
-            if started:
+            started_expansion = await self._expand(townhalls)
+            if started_expansion:
                 bank_natural = False
-            elif s.bases <= 1:
+            else:
                 # Bad terrain / occupied sites may delay a retry, not freeze production indefinitely.
                 self._natural_retry_at = self.time + 8.0
                 bank_natural = False
@@ -696,7 +722,6 @@ class CompetitiveBot(BotAI):
                     "expansion_wait_no_site",
                     next_retry=round(self._natural_retry_at, 2),
                 )
-        emergency = s.local_pressure >= 5
         if build_depot and (
             not bank_natural or self.supply_left < 4 or not depots.ready
         ):
@@ -707,9 +732,24 @@ class CompetitiveBot(BotAI):
         if depots.ready and not self._plan_total(U.BARRACKS):
             await self._build(U.BARRACKS, rax_anchor or ramp or interior, addon=True)
 
+        bank_bio = False
+        if bio_research:
+            lab, upgrade = bio_research
+            can_pay = self.can_afford(upgrade)
+            if can_pay:
+                if self._research(lab, (upgrade,)):
+                    self._trace_intent("priority_research", upgrade=upgrade.name)
+            else:
+                bank_bio = True
+        bank_expansion = (
+            banking_later
+            and not started_expansion
+            and self.time >= self._natural_retry_at
+        )
+
         support = (
             None
-            if bank_natural or emergency
+            if bank_natural or bank_bio or bank_expansion or emergency
             else self._protected_support(s, supply["left"])
         )
         bank_support = False
@@ -735,6 +775,7 @@ class CompetitiveBot(BotAI):
             and self.time >= 38
             and not bank_natural
             and not bank_support
+            and not bank_expansion
             and not emergency
         ):
             gas_target = desired_refineries(
@@ -749,6 +790,8 @@ class CompetitiveBot(BotAI):
                 continue
             if (
                 not bank_natural
+                and not bank_bio
+                and not bank_expansion
                 and not bank_support
                 and not emergency
                 and rax.ready
@@ -771,6 +814,10 @@ class CompetitiveBot(BotAI):
             if emergency
             else "bank_natural"
             if bank_natural
+            else "bank_bio"
+            if bank_bio
+            else "bank_expansion"
+            if bank_expansion
             else f"bank_{support[0].name.lower()}"
             if bank_support and support
             else "normal"
@@ -787,7 +834,10 @@ class CompetitiveBot(BotAI):
         if emergency:
             await self._addons_and_army(s, supply, False)
             await self._tech(s, interior)
-        elif not bank_natural and not bank_support:
+        elif bank_bio and bio_research:
+            # Float the upgrade cost, not every extra mineral while gas comes in.
+            self._train_surplus_marines(rax.ready, supply, bio_research[1])
+        elif not (bank_natural or bank_support or bank_expansion):
             await self._tech(s, interior)
             await self._addons_and_army(s, supply, False)
         if s.local_pressure < 4:
@@ -816,17 +866,61 @@ class CompetitiveBot(BotAI):
         )
         return False
 
+    def _track_base_losses(self) -> None:
+        # Explicit own death events distinguish a destroyed base from a lift.
+        for tag in self.state.dead_units:
+            lost = self._seen_halls.get(tag)
+            if lost is not None:
+                self._blocked_expansions[lost] = self.time + 82
+        self._seen_halls = {
+            h.tag: h.position for h in self.townhalls if not h.is_flying
+        }
+
+    def _update_expansion_risk(
+        self, contacts: list[Unit], structures: list[Unit]
+    ) -> None:
+        now = self.time
+        fresh = {
+            hit.position: hit
+            for hit in self._expansion_threats
+            if now - hit.stamp <= 24
+        }
+        for enemy in (*contacts, *structures):
+            if not enemy.can_attack_ground and enemy.type_id != U.BUNKER:
+                continue
+            if enemy.type_id in WORKER_TYPES:
+                continue
+            cell = enemy.position.rounded
+            fresh[cell] = Contact(cell, now)
+        self._expansion_threats = list(fresh.values())
+
     async def _expand(self, halls: list[Unit]) -> bool:
         occupied = [h.position for h in self.townhalls]
-        origin = halls[0].position if halls else self.start_location
-        sites = sorted(
-            self.expansion_locations_list,
-            key=lambda p: (p.distance_to(origin), p.x, p.y),
-        )
-        for location in sites:
+        origin = self.start_location
+        starts = self.enemy_start_locations
+        threats = self._expansion_threats
+
+        def rank(p: Point2) -> tuple[float, float, float]:
+            home = p.distance_to(origin)
+            if len(occupied) < 2:
+                return home, p.x, p.y
+            support = min((p.distance_to(h.position) for h in halls), default=home)
+            away = min((p.distance_to(e) for e in starts), default=0)
+            return expansion_site_rank(home, support, away), p.x, p.y
+
+        for location in sorted(self.expansion_locations_list, key=rank):
             if any(p.distance_to(location) < 12 for p in occupied):
                 continue
-            if self._blocked_expansions.get(location, 0) > self.time:
+            if any(
+                blocked.distance_to(location) < 3 and until > self.time
+                for blocked, until in self._blocked_expansions.items()
+            ):
+                continue
+            if any(hit.position.distance_to(location) < 17 for hit in threats):
+                continue
+            if len(occupied) >= 2 and all(
+                location.distance_to(h.position) > 36 for h in halls
+            ):
                 continue
             candidates = self._candidate_builders(location)[:3]
             if not candidates:
@@ -911,7 +1005,13 @@ class CompetitiveBot(BotAI):
         )
         if s.bases < 2 and self.time < 185:
             rax_target = 2 if s.local_pressure >= 5 else 1
-        fac_target = 2 if s.bases >= 3 and s.army_supply >= 35 else 1
+        fac_target = (
+            2
+            if s.time >= 300
+            and s.army_supply >= 24
+            and (s.bases >= 3 or getattr(self, "_siege_until", 0) > s.time)
+            else 1
+        )
         sp_target = 2 if s.bases >= 3 and (s.enemy_air >= 5 or self.time > 430) else 1
 
         readiness = (
@@ -963,6 +1063,8 @@ class CompetitiveBot(BotAI):
                     return
 
     def _research(self, lab: Unit, options: Iterable[Up]) -> bool:
+        if lab.tag in self.unit_tags_received_action:
+            return False
         for up in options:
             if (
                 up in self.state.upgrades
@@ -995,7 +1097,7 @@ class CompetitiveBot(BotAI):
                 if chosen:
                     break
         if upgrades:
-            self._stim_and_support()
+            self._secondary_bio_research()
         tech_count = self._plan_total(U.BARRACKSTECHLAB)
         tech_wanted = 2 if s.enemy_armor or s.bases >= 3 else 1
         if s.time > 510 and s.enemy_armor:
@@ -1101,12 +1203,62 @@ class CompetitiveBot(BotAI):
         self.vespene -= cost.vespene
         return True
 
-    def _stim_and_support(self) -> None:
+    def _stim_underway(self) -> bool:
+        return Up.STIMPACK in self.state.upgrades or bool(
+            self.already_pending_upgrade(Up.STIMPACK)
+        )
+
+    def _priority_bio_upgrade(self, s: Signals) -> tuple[Unit, Up] | None:
+        if s.bases < 2 or s.army_supply < 10:
+            return None
+        if s.time < 256 and not (
+            self.units({U.SIEGETANK, U.SIEGETANKSIEGED}) or self._pending(U.SIEGETANK)
+        ):
+            return None
+        labs = self.structures(U.BARRACKSTECHLAB).ready.idle
+        attached = {rax.add_on_tag for rax in self.structures(U.BARRACKS).ready}
+        available = [
+            lab
+            for lab in labs
+            if lab.tag in attached and lab.tag not in self.unit_tags_received_action
+        ]
+        if not available:
+            return None
+        lab = min(available, key=lambda u: u.tag)
+        # Shield must not consume the gas for an opening Tank or Stim.
+        if not self._stim_underway():
+            return lab, Up.STIMPACK
+        if (
+            Up.STIMPACK in self.state.upgrades
+            and Up.COMBATSHIELD not in self.state.upgrades
+            and not self.already_pending_upgrade(Up.COMBATSHIELD)
+            and s.army_supply >= 22
+        ):
+            return lab, Up.COMBATSHIELD
+        return None
+
+    def _train_surplus_marines(
+        self, barracks: Iterable[Unit], supply: dict[str, float], upgrade: Up
+    ) -> None:
+        reserve = self.calculate_cost(upgrade).minerals
+        price = self.calculate_cost(U.MARINE).minerals
+        for rax in sorted(barracks, key=lambda u: u.tag):
+            if self.minerals < reserve + price:
+                return
+            size = len(rax.orders)
+            if size >= (2 if rax.has_reactor else 1):
+                continue
+            if rax.add_on_tag and not self.structures.ready.find_by_tag(rax.add_on_tag):
+                continue
+            self._train(rax, U.MARINE, supply, queue=size > 0)
+
+    def _secondary_bio_research(self) -> None:
+        if Up.COMBATSHIELD not in self.state.upgrades:
+            return
         for lab in sorted(
             self.structures(U.BARRACKSTECHLAB).ready.idle, key=lambda u: u.tag
         ):
-            options = (Up.STIMPACK, Up.COMBATSHIELD, Up.PUNISHERGRENADES)
-            if self._research(lab, options):
+            if self._research(lab, (Up.PUNISHERGRENADES,)):
                 break
 
     def _resume_construction(self) -> None:

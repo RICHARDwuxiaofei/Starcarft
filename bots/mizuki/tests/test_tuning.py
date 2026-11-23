@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from sc2.ids.unit_typeid import UnitTypeId as U
+from sc2.ids.upgrade_id import UpgradeId as Up
 from sc2.position import Point2
 
 from bots.mizuki.bot import CompetitiveBot
@@ -214,20 +215,22 @@ def test_opening_reserve_persists_past_old_cutoff_and_drops_under_real_pressure(
     assert not protect_natural(row, barracks_ready=True, pending=False, retry_ok=False)
     assert desired_refineries(1, 50, factory_ready=True) == 1
     assert desired_refineries(2, 532, factory_ready=True) == 1
-    assert desired_refineries(2, 100, factory_ready=True) == 2
+    assert desired_refineries(2, 100, factory_ready=True) == 3
 
 
 @pytest.mark.parametrize(
-    ("money", "bases", "candidate", "expected_mode", "first_action"),
+    ("money", "bases", "candidate", "bio", "expected_mode", "first_action"),
     [
-        (325, 1, None, "bank_natural", None),
-        (400, 1, None, "normal", "expand"),
-        (100, 2, U.SIEGETANK, "bank_siegetank", None),
-        (150, 2, U.SIEGETANK, "normal", "train_SIEGETANK"),
+        (325, 1, None, None, "bank_natural", None),
+        (400, 1, None, None, "normal", "expand"),
+        (100, 2, U.SIEGETANK, None, "bank_siegetank", None),
+        (150, 2, U.SIEGETANK, None, "normal", "train_SIEGETANK"),
+        (100, 2, None, False, "bank_bio", "surplus_marines"),
+        (405, 2, None, True, "normal", "stim"),
     ],
 )
-def test_macro_spends_on_expansion_or_first_tank_before_optional_army(
-    money, bases, candidate, expected_mode, first_action
+def test_macro_preserves_opening_and_prioritizes_stim_before_third(
+    money, bases, candidate, bio, expected_mode, first_action
 ):
     class Group(list):
         ready = property(lambda self: self)
@@ -242,16 +245,19 @@ def test_macro_spends_on_expansion_or_first_tank_before_optional_army(
     tech = AsyncMock(side_effect=lambda *_: events.append("tech"))
     expand = AsyncMock(side_effect=lambda *_: (events.append("expand"), True)[1])
     factory = SimpleNamespace(tag=3)
+    lab = SimpleNamespace(tag=5)
+    natural = SimpleNamespace(tag=100, position=point(30, 8), is_idle=False)
+    t = 357 if bio is not None else 186
     f = SimpleNamespace(
-        time=186,
+        time=t,
         minerals=money,
-        vespene=300,
-        supply_workers=22,
+        vespene=18 if bio is False else 300,
+        supply_workers=42 if bio is not None else 22,
         supply_left=10,
         supply_used=33,
         supply_cap=43,
         workers=Group([object()]),
-        townhalls=Group([hall]),
+        townhalls=Group([hall, natural] if bio is not None else [hall]),
         _anchors=lambda: (None, None, None),
         structures=lambda t: Group([object()]) if t == U.BARRACKS else Group(),
         _working_refineries=lambda: 1,
@@ -266,7 +272,16 @@ def test_macro_spends_on_expansion_or_first_tank_before_optional_army(
         _next_build={},
         _natural_retry_at=0,
         _protected_support=lambda *_: (candidate, factory) if candidate else None,
-        can_afford=lambda t: money >= (400 if t == U.COMMANDCENTER else 150),
+        _priority_bio_upgrade=lambda _: (lab, Up.STIMPACK) if bio is not None else None,
+        _research=Mock(side_effect=lambda *_: (events.append("stim"), True)[1]),
+        _train_surplus_marines=Mock(
+            side_effect=lambda *_: events.append("surplus_marines")
+        ),
+        can_afford=lambda item: (
+            bio
+            if item == Up.STIMPACK
+            else money >= (400 if item == U.COMMANDCENTER else 150)
+        ),
         _train=lambda _, unit, __: (events.append(f"train_{unit.name}"), True)[1],
         _build=AsyncMock(),
         _gas=AsyncMock(),
@@ -277,9 +292,14 @@ def test_macro_spends_on_expansion_or_first_tank_before_optional_army(
         _staff_refineries=Mock(),
         _repair=Mock(),
     )
-    s = Signals(186, bases, 7, 0, 0, 0, False)
+    s = Signals(t, bases, 35 if bio is not None else 7, 0, 0, 0, False)
     asyncio.run(CompetitiveBot._macro(f, s))
     assert f._last_macro_mode == expected_mode
+    if bio is not None:
+        expand.assert_not_awaited()
+    if bio is False:
+        army.assert_not_awaited()
+        tech.assert_not_awaited()
     if first_action:
         assert events[0] == first_action
     else:

@@ -314,3 +314,89 @@ def test_escort_does_not_immediately_return_from_anti_air_escape():
     bot.time += 1
     asyncio.run(control_combat(bot, 2))
     assert medivac.actions == [first]
+
+
+def siege_line():
+    return [
+        DummyUnit(90, U.SIEGETANKSIEGED, point(33, 20), ground_range=13),
+        DummyUnit(91, U.SIEGETANKSIEGED, point(35, 21), ground_range=13),
+    ]
+
+
+def test_unsupported_ground_units_pull_behind_base_during_superior_siege():
+    guns = siege_line()
+    marine = DummyUnit(1, U.MARINE, point(28, 20))
+    marauder = DummyUnit(2, U.MARAUDER, point(27, 20))
+    bot = dummy_bot(units=[marine, marauder], enemies=guns, now=410)
+    asyncio.run(control_combat(bot, 0))
+    for unit in (marine, marauder):
+        assert len(unit.actions) == 1
+        kind, destination = unit.actions[0]
+        assert kind == "move" and destination.x < bot.start_location.x
+        assert all(gun.distance_to(destination) > 14 for gun in guns)
+    assert marine.actions[0][1] != marauder.actions[0][1]
+
+
+def test_siege_line_anchors_armored_return_fire_and_sieges_reserve():
+    guns = siege_line()
+    placed = DummyUnit(1, U.SIEGETANKSIEGED, point(22, 20), ground_range=13)
+    reserve = DummyUnit(2, U.SIEGETANK, point(17, 20), ground_range=7)
+    # Matching tank counts are not enough while the opposing guns have infantry support.
+    opposing_bio = [DummyUnit(100 + i, U.MARINE, point(35, 20)) for i in range(3)]
+    bot = dummy_bot(units=[placed, reserve], enemies=[*guns, *opposing_bio], now=410)
+    asyncio.run(control_combat(bot, 0))
+    assert placed.actions == [("attack", guns[0])]
+    assert reserve.actions == [(AbilityId.SIEGEMODE_SIEGEMODE, None)]
+
+
+def test_safe_guard_cancels_chase_but_fires_on_units_crossing_the_line():
+    guns = siege_line()
+    marine = DummyUnit(2, U.MARINE, point(16, 20), is_idle=False)
+    bot = dummy_bot(units=[marine], enemies=guns, now=410)
+    asyncio.run(control_combat(bot, 0))
+    assert marine.actions == [(AbilityId.HOLDPOSITION_HOLD, None)]
+    advancing = DummyUnit(99, U.MARINE, point(20, 21))
+    bot.enemy_units.append(advancing)
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert marine.actions[-1] == ("attack", advancing)
+
+
+def test_hidden_siege_snapshots_do_not_keep_defensive_guard_active():
+    guns = siege_line()
+    marine = DummyUnit(2, U.MARINE, point(28, 20))
+    bot = dummy_bot(units=[marine], enemies=guns, now=410)
+    asyncio.run(control_combat(bot, 0))
+    assert marine.actions[-1][0] == "move"
+    for gun in guns:
+        gun.is_snapshot = True
+    advancing = DummyUnit(99, U.MARINE, point(24, 20))
+    bot.enemy_units.append(advancing)
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert marine.actions[-1] == ("attack", advancing)
+
+
+def test_concentrated_superior_armor_can_counterattack():
+    guns = siege_line()
+    marine = DummyUnit(2, U.MARINE, point(25, 20))
+    allied_tanks = [
+        DummyUnit(20 + i, U.SIEGETANKSIEGED, point(22, 20 + i), ground_range=13)
+        for i in range(3)
+    ]
+    bot = dummy_bot(units=[marine, *allied_tanks], enemies=guns, now=410)
+    asyncio.run(control_combat(bot, 0))
+    assert marine.actions == [("attack", guns[0])]
+
+
+def test_defensive_line_releases_when_one_covering_tank_and_infantry_concentrate():
+    guns = siege_line()
+    squad = [DummyUnit(i, U.MARINE, point(25, 20)) for i in range(1, 11)]
+    tank = DummyUnit(20, U.SIEGETANKSIEGED, point(22, 20), ground_range=13)
+    bot = dummy_bot(units=[squad[0], tank], enemies=guns, now=410)
+    asyncio.run(control_combat(bot, 0))
+    assert squad[0].actions[0][0] == "move"
+    bot.units.extend(squad[1:])
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert squad[0].actions[-1] == ("attack", guns[0])

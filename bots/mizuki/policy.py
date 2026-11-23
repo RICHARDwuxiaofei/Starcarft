@@ -33,14 +33,14 @@ def supply_order_count(
     return min(starts, 2 if used >= 65 else 1)
 
 
-def expansion_allowed(s: Signals) -> bool:
+def expansion_allowed(s: Signals, *, saturated: bool = False) -> bool:
     if s.bases == 0:
         return True
     if s.local_pressure >= 5 or s.bases >= 5:
         return False
-    gates = {1: (100, 1), 2: (272, 18), 3: (405, 35), 4: (535, 60)}
+    gates = {1: (100, 1), 2: (252, 14), 3: (375, 26), 4: (500, 44)}
     time, army = gates[s.bases]
-    return s.time >= time and s.army_supply >= army
+    return s.time >= time and s.army_supply >= army and (s.bases == 1 or saturated)
 
 
 def air_targets(s: Signals) -> tuple[int, int]:
@@ -73,9 +73,16 @@ def protect_natural(
 def desired_refineries(active_bases: int, gas_bank: int, *, factory_ready: bool) -> int:
     if active_bases < 2 or not factory_ready or gas_bank >= 185:
         return 1
-    return min(6, 2 if active_bases == 2 else 2 * active_bases - 2)
+    return min(7, 3 if active_bases == 2 else 2 * active_bases - 1)
 
 
 def surplus_gas(minerals: float, gas: float) -> bool:
     """Share the same gas safety valve across all worker allocation paths."""
-    return gas >= 225 and gas > minerals * 0.9
+    return gas >= 300 and gas > minerals * 1.25
+
+
+def expansion_site_rank(
+    home_distance: float, support_distance: float, enemy_distance: float
+) -> float:
+    """Favor pads our existing economy can support, not the closest by Euclidean distance."""
+    return home_distance + 1.25 * support_distance - 0.65 * min(85, enemy_distance)
