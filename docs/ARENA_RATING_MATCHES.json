@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "baseline": 1500,
+  "k": 32,
+  "scope": "Recorded natural wins from the first four-bot round robin through the Mizuki Gen 8 tests",
+  "matches": [
+    {
+      "id": "codex-round-robin-20261124-013959/codex-vs-webgpt",
+      "finished_at": "2026-11-24T01:43:57.2415422+08:00",
+      "winner": "webgpt",
+      "winner_commit": "42d469af",
+      "loser": "codex",
+      "loser_commit": "fbc9c54"
+    },
+    {
+      "id": "codex-round-robin-20261124-013959/webgpt-vs-deepseek",
+      "finished_at": "2026-11-24T01:51:51.2978085+08:00",
+      "winner": "webgpt",
+      "winner_commit": "42d469af",
+      "loser": "deepseek",
+      "loser_commit": "32e1b50"
+    },
+    {
+      "id": "codex-round-robin-20261124-013959/antigravity-vs-codex",
+      "finished_at": "2026-11-24T01:51:53.1646979+08:00",
+      "winner": "codex",
+      "winner_commit": "fbc9c54",
+      "loser": "antigravity",
+      "loser_commit": "c740e9c"
+    },
+    {
+      "id": "codex-round-robin-20261124-013959/antigravity-vs-webgpt",
+      "finished_at": "2026-11-24T01:54:45.5806382+08:00",
+      "winner": "webgpt",
+      "winner_commit": "42d469af",
+      "loser": "antigravity",
+      "loser_commit": "c740e9c"
+    },
+    {
+      "id": "codex-round-robin-20261124-013959/deepseek-vs-codex",
+      "finished_at": "2026-11-24T01:55:24.4915312+08:00",
+      "winner": "codex",
+      "winner_commit": "fbc9c54",
+      "loser": "deepseek",
+      "loser_commit": "32e1b50"
+    },
+    {
+      "id": "gui/20261124-deepseek-sol-rematch",
+      "finished_at": "2026-11-24T02:33:34+08:00",
+      "winner": "codex",
+      "winner_commit": "3d4470dc",
+      "loser": "deepseek",
+      "loser_commit": "bd79bd3b"
+    },
+    {
+      "id": "gui/20261124-deepseek-sol-fast-watch",
+      "finished_at": "2026-11-24T02:44:14+08:00",
+      "winner": "codex",
+      "winner_commit": "3d4470dc",
+      "loser": "deepseek",
+      "loser_commit": "bd79bd3b"
+    },
+    {
+      "id": "gui/20261124-sol-agy-web/01-agy-vs-sol",
+      "finished_at": "2026-11-24T02:48:43+08:00",
+      "winner": "antigravity",
+      "winner_commit": "7f20fadc",
+      "loser": "codex",
+      "loser_commit": "3d4470dc"
+    },
+    {
+      "id": "gui/20261124-sol-agy-web/02-web-vs-winner",
+      "finished_at": "2026-11-24T02:54:54+08:00",
+      "winner": "webgpt",
+      "winner_commit": "42d469af",
+      "loser": "antigravity",
+      "loser_commit": "7f20fadc"
+    },
+    {
+      "id": "codex-gen3-vs-agy-20261124-032057/match",
+      "finished_at": "2026-11-24T03:23:38.6691642+08:00",
+      "winner": "antigravity",
+      "winner_commit": "7f20fad",
+      "loser": "codex",
+      "loser_commit": "cb7618d"
+    },
+    {
+      "id": "codex-ds-gen7-vs-sol-gen3-20261124-032519/match",
+      "finished_at": "2026-11-24T03:26:27.5088883+08:00",
+      "winner": "codex",
+      "winner_commit": "cb7618d",
+      "loser": "deepseek",
+      "loser_commit": "9f0967a"
+    },
+    {
+      "id": "codex-ds-vs-mizuki-20261124-032744/match",
+      "finished_at": "2026-11-24T03:29:26.3854711+08:00",
+      "winner": "mizuki",
+      "winner_commit": "683ef07",
+      "loser": "deepseek",
+      "loser_commit": "9f0967a"
+    },
+    {
+      "id": "codex-mizuki-matrix-20261124-033102/mizuki-vs-antigravity",
+      "finished_at": "2026-11-24T03:33:17.278285+08:00",
+      "winner": "antigravity",
+      "winner_commit": "7f20fad",
+      "loser": "mizuki",
+      "loser_commit": "683ef07"
+    },
+    {
+      "id": "codex-mizuki-matrix-20261124-033102/mizuki-vs-codex",
+      "finished_at": "2026-11-24T03:33:31.2624703+08:00",
+      "winner": "codex",
+      "winner_commit": "cb7618d",
+      "loser": "mizuki",
+      "loser_commit": "683ef07"
+    },
+    {
+      "id": "codex-mizuki-matrix-20261124-033102/mizuki-vs-webgpt",
+      "finished_at": "2026-11-24T03:35:16.174773+08:00",
+      "winner": "webgpt",
+      "winner_commit": "42d469af",
+      "loser": "mizuki",
+      "loser_commit": "683ef07"
+    },
+    {
+      "id": "codex-mizuki8-matches-20261124-034608/mizuki-vs-antigravity",
+      "finished_at": "2026-11-24T03:48:43.8134265+08:00",
+      "winner": "antigravity",
+      "winner_commit": "7f20fad",
+      "loser": "mizuki",
+      "loser_commit": "ff370ba"
+    },
+    {
+      "id": "codex-mizuki8-matches-20261124-034608/mizuki-vs-deepseek",
+      "finished_at": "2026-11-24T03:49:46.5181399+08:00",
+      "winner": "mizuki",
+      "winner_commit": "ff370ba",
+      "loser": "deepseek",
+      "loser_commit": "0c8349b"
+    }
+  ]
+}

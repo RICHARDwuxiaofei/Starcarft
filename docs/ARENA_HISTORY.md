@@ -58,3 +58,7 @@ DeepSeek 9f0967a（代码 64d8375）对 Mizuki 683ef07，RedCityLE、加速、�
 ## Mizuki 训练第 8 代并行对照
 
 Mizuki ff370ba 对 DeepSeek 第 8 代 0c8349b（代码 6b0d196）和 AGY 第 2 代 7f20fad，两场并行，RedCityLE、SC2 5.0.17.98745、加速、对手一号位、种子 98746、现实上限 15 分钟。Mizuki 18:42 自然胜 DeepSeek（末尾评分 12300:0），10:11 自然负 AGY（Mizuki 750:7350）。本机录像、评分和复盘在 Codex 工作区 results/codex-mizuki8-matches-20261124-034608/。
+
+## 暂定 Elo 榜
+
+从首轮四家循环赛到 Mizuki 第 8 代双场，纳入 17 场有自然胜负的擂台对局，包含中间已核验的 GUI 对局。初始 1500、K=32，不计异常与到时按分快照结果。台账见 [ARENA_RATING_MATCHES.json](ARENA_RATING_MATCHES.json)，用 tools/rate_matches.py 重算。
