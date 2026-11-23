@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from s2clientprotocol import data_pb2, sc2api_pb2
 from sc2.data import Alliance, Attribute, CloakState, DisplayType, Race, Target
+from sc2.dicts.generic_redirect_abilities import GENERIC_REDIRECT_ABILITIES
 from sc2.dicts.unit_research_abilities import RESEARCH_INFO
 from sc2.dicts.unit_train_build_abilities import TRAIN_INFO
 from sc2.game_data import GameData
@@ -985,6 +986,8 @@ def build_response_data() -> sc2api_pb2.ResponseData:
         ab.friendly_name = ability.name
         ab.available = True
         ab.target = _ability_target_type(ability)
+        if ability in GENERIC_REDIRECT_ABILITIES:
+            ab.remaps_to_ability_id = GENERIC_REDIRECT_ABILITIES[ability].value
 
     # Units
     for spec in UNIT_SPECS:
@@ -1130,6 +1133,7 @@ class OfflineScenario:
         include_watchtowers: bool = True,
         broken_ramp: bool = False,
         setup_standard_start: bool = True,
+        fog_snapshot_resources: bool = True,
     ) -> None:
         self.bot = CompetitiveBot(seed=seed)
         self.bot.distance_calculation_method = 0
@@ -1141,6 +1145,7 @@ class OfflineScenario:
         self.upgrades: set[UpgradeId] = set()
         self.visible_points: list[tuple[Point2, float]] = []
         self.reveal_all_map: bool = False
+        self.fog_snapshot_resources: bool = fog_snapshot_resources
         self.step_commands: list[list[UnitCommand]] = []
         self.broken_ramp = broken_ramp
 
@@ -1473,6 +1478,23 @@ class OfflineScenario:
         raw.map_state.creep.data = bytes(160 * 160 // 8)
 
         for sim in self.units:
+            is_fog_snapshot_resource = False
+            if (
+                sim.alliance == Alliance.Neutral.value
+                and self.fog_snapshot_resources
+                and not self.reveal_all_map
+                and sim.unit_type
+                in {
+                    UnitTypeId.MINERALFIELD,
+                    UnitTypeId.MINERALFIELD750,
+                    UnitTypeId.VESPENEGEYSER,
+                }
+            ):
+                rx = max(0, min(159, round(sim.pos.x)))
+                ry = max(0, min(159, round(sim.pos.y)))
+                if vis_bytes[ry * 160 + rx] != 2:
+                    is_fog_snapshot_resource = True
+
             # Respect legal fog-of-war for enemies!
             if sim.alliance == Alliance.Enemy.value and not self.reveal_all_map:
                 rx = max(0, min(159, round(sim.pos.x)))
@@ -1481,7 +1503,11 @@ class OfflineScenario:
                     continue
 
             pu = raw.units.add()
-            pu.display_type = DisplayType.Visible.value
+            pu.display_type = (
+                DisplayType.Snapshot.value
+                if is_fog_snapshot_resource
+                else DisplayType.Visible.value
+            )
             pu.alliance = sim.alliance
             pu.tag = sim.tag
             pu.unit_type = sim.unit_type.value
@@ -1525,8 +1551,12 @@ class OfflineScenario:
             pu.add_on_tag = sim.add_on_tag
             pu.assigned_harvesters = sim.assigned_harvesters
             pu.ideal_harvesters = sim.ideal_harvesters
-            pu.mineral_contents = sim.mineral_contents
-            pu.vespene_contents = sim.vespene_contents
+            pu.mineral_contents = (
+                0 if is_fog_snapshot_resource else sim.mineral_contents
+            )
+            pu.vespene_contents = (
+                0 if is_fog_snapshot_resource else sim.vespene_contents
+            )
             pu.cargo_space_taken = sim.cargo_space_taken
             pu.cargo_space_max = sim.cargo_space_max
             pu.weapon_cooldown = sim.weapon_cooldown
@@ -1577,6 +1607,7 @@ class OfflineScenario:
     ) -> None:
         """Apply issued commands minimally in long-game simulation tests."""
         by_tag = {u.tag: u for u in self.units}
+        advanced_land_tags: set[int] = set()
         for cmd in commands:
             unit = by_tag.get(cmd.unit.tag)
             if unit is None:
@@ -1585,6 +1616,8 @@ class OfflineScenario:
             if ab == AbilityId.HARVEST_GATHER and cmd.target is not None:
                 tgt_tag = cmd.target.tag if hasattr(cmd.target, "tag") else cmd.target
                 unit.orders = [(ab, tgt_tag, 0.0)]
+            elif ab in {AbilityId.HARVEST_RETURN, AbilityId.HARVEST_RETURN_SCV}:
+                unit.orders = [(AbilityId.HARVEST_RETURN_SCV, None, 0.0)]
             elif ab in {AbilityId.MOVE_MOVE, AbilityId.ATTACK, AbilityId.ATTACK_ATTACK}:
                 if isinstance(cmd.target, Point2):
                     unit.orders = [(ab, cmd.target, 0.0)]
@@ -1606,15 +1639,31 @@ class OfflineScenario:
                 unit.is_flying = True
                 unit.orders = []
             elif ab == AbilityId.LAND_ORBITALCOMMAND and isinstance(cmd.target, Point2):
-                unit.unit_type = UnitTypeId.ORBITALCOMMAND
-                unit.is_flying = False
-                unit.pos = cmd.target
-                unit.orders = []
+                advanced_land_tags.add(unit.tag)
+                dist = unit.pos.distance_to(cmd.target)
+                if dist <= 1.5:
+                    unit.unit_type = UnitTypeId.ORBITALCOMMAND
+                    unit.is_flying = False
+                    unit.pos = cmd.target
+                    unit.orders = []
+                else:
+                    unit.pos = unit.pos.towards(
+                        cmd.target, min(1.875 * dt_seconds, dist)
+                    )
+                    unit.orders = [(ab, cmd.target, 0.0)]
             elif ab == AbilityId.LAND_COMMANDCENTER and isinstance(cmd.target, Point2):
-                unit.unit_type = UnitTypeId.COMMANDCENTER
-                unit.is_flying = False
-                unit.pos = cmd.target
-                unit.orders = []
+                advanced_land_tags.add(unit.tag)
+                dist = unit.pos.distance_to(cmd.target)
+                if dist <= 1.5:
+                    unit.unit_type = UnitTypeId.COMMANDCENTER
+                    unit.is_flying = False
+                    unit.pos = cmd.target
+                    unit.orders = []
+                else:
+                    unit.pos = unit.pos.towards(
+                        cmd.target, min(1.875 * dt_seconds, dist)
+                    )
+                    unit.orders = [(ab, cmd.target, 0.0)]
             elif ab == AbilityId.CANCEL_BUILDINPROGRESS:
                 self.remove_unit(unit.tag)
             elif ab == AbilityId.SIEGEMODE_SIEGEMODE:
@@ -1695,3 +1744,25 @@ class OfflineScenario:
                                 self.vespene -= spec.vespene
                                 self.add_unit(ut, unit.pos + Point2((2.0, -2.0)))
                             break
+
+        # Continue executing persistent flying townhall landing orders across frames.
+        for unit in self.units:
+            if unit.tag in advanced_land_tags or not unit.orders:
+                continue
+            ab, tgt, _ = unit.orders[0]
+            if ab in {
+                AbilityId.LAND_COMMANDCENTER,
+                AbilityId.LAND_ORBITALCOMMAND,
+            } and isinstance(tgt, Point2):
+                dist = unit.pos.distance_to(tgt)
+                if dist <= 1.5:
+                    unit.unit_type = (
+                        UnitTypeId.ORBITALCOMMAND
+                        if unit.unit_type == UnitTypeId.ORBITALCOMMANDFLYING
+                        else UnitTypeId.COMMANDCENTER
+                    )
+                    unit.is_flying = False
+                    unit.pos = tgt
+                    unit.orders = []
+                else:
+                    unit.pos = unit.pos.towards(tgt, min(1.875 * dt_seconds, dist))

@@ -491,13 +491,19 @@ class EconomyManager:
                 safe_refineries.append(ref)
         safe_ref_tags = {ref.tag for ref in safe_refineries}
 
-        # Dynamic gas throttle if mineral-starved with banked vespene.
-        if bot.vespene >= 750 and bot.minerals < 150:
+        # Dynamic gas throttle only when mineral-starved with banked vespene.
+        if bot.vespene >= 900 and bot.minerals < 120:
             desired_gas = 0
-        elif bot.vespene >= 500 and bot.minerals < 180:
+        elif bot.vespene >= 650 and bot.minerals < 160:
             desired_gas = 1
+        elif bot.vespene >= 450 and bot.minerals < 180:
+            desired_gas = 2
         else:
             desired_gas = 3
+
+        all_landed_halls = [
+            th for th in bot.townhalls if th.type_id in TOWNHALL_LANDED_TYPES
+        ]
 
         busy_tags = (
             set(self.builder_reservations.keys())
@@ -508,7 +514,8 @@ class EconomyManager:
             busy_tags.add(scout_worker_tag)
 
         # Classify every non-busy worker's current mining site.
-        free_workers: list[Unit] = []
+        idle_workers: list[Unit] = []
+        relocate_workers: list[Unit] = []
         hall_workers: dict[int, list[Unit]] = {th.tag: [] for th in safe_halls}
         ref_workers: dict[int, list[Unit]] = {ref.tag: [] for ref in safe_refineries}
 
@@ -520,7 +527,7 @@ class EconomyManager:
 
             if w.is_idle:
                 self.evacuated_tags.discard(w.tag)
-                free_workers.append(w)
+                idle_workers.append(w)
                 continue
 
             target = w.order_target
@@ -528,18 +535,30 @@ class EconomyManager:
             if target in safe_ref_tags:
                 ref_workers[target].append(w)
                 assigned_to_safe_ref = True
-            elif w.is_carrying_vespene and target in safe_hall_tags:
-                nearest_ref = min(
-                    safe_refineries,
-                    key=lambda r: r.distance_to(w.position),
+            elif w.is_carrying_vespene:
+                nearest_hall = min(
+                    all_landed_halls,
+                    key=lambda th: th.distance_to(w.position),
                     default=None,
                 )
-                if (
-                    nearest_ref is not None
-                    and nearest_ref.distance_to(w.position) <= 14.0
+                if target in safe_hall_tags or (
+                    w.is_returning
+                    and nearest_hall is not None
+                    and nearest_hall.tag in safe_hall_tags
+                    and w.distance_to(nearest_hall.position) <= 14.0
+                    and w.tag not in self.evacuated_tags
                 ):
-                    ref_workers[nearest_ref.tag].append(w)
-                    assigned_to_safe_ref = True
+                    nearest_ref = min(
+                        safe_refineries,
+                        key=lambda r: r.distance_to(w.position),
+                        default=None,
+                    )
+                    if (
+                        nearest_ref is not None
+                        and nearest_ref.distance_to(w.position) <= 14.0
+                    ):
+                        ref_workers[nearest_ref.tag].append(w)
+                        assigned_to_safe_ref = True
 
             if assigned_to_safe_ref:
                 self.evacuated_tags.discard(w.tag)
@@ -551,8 +570,21 @@ class EconomyManager:
                     if target in mtags:
                         assigned_hall_tag = htag
                         break
-            elif w.is_carrying_minerals and target in safe_hall_tags:
-                assigned_hall_tag = target
+            elif w.is_carrying_minerals:
+                if target in safe_hall_tags:
+                    assigned_hall_tag = target
+                elif w.is_returning and w.tag not in self.evacuated_tags:
+                    nearest_hall = min(
+                        all_landed_halls,
+                        key=lambda th: th.distance_to(w.position),
+                        default=None,
+                    )
+                    if (
+                        nearest_hall is not None
+                        and nearest_hall.tag in safe_hall_tags
+                        and w.distance_to(nearest_hall.position) <= 14.0
+                    ):
+                        assigned_hall_tag = nearest_hall.tag
 
             if assigned_hall_tag is not None:
                 self.evacuated_tags.discard(w.tag)
@@ -562,86 +594,197 @@ class EconomyManager:
             # Worker is mining an evacuated, overwhelmed, or depleted site -> reassign.
             if w.is_gathering or w.is_returning or w.tag in self.evacuated_tags:
                 self.evacuated_tags.discard(w.tag)
-                free_workers.append(w)
+                relocate_workers.append(w)
 
-        # Pull excess gas workers if over-saturated or throttled.
+        hall_ideals = {
+            th.tag: min(24, max(1, len(patches_by_hall[th.tag]) * 2))
+            for th in safe_halls
+        }
+        hall_max_useful = {
+            th.tag: min(24, max(1, len(patches_by_hall[th.tag]) * 3))
+            for th in safe_halls
+        }
+        must_assign: list[Unit] = idle_workers + relocate_workers
+
+        # Pull excess gas workers if strictly over-saturated or throttled (only if a mineral line has room).
+        any_hall_can_take_gas_excess = any(
+            len(hall_workers[th.tag]) < hall_max_useful[th.tag] for th in safe_halls
+        )
         for ref in safe_refineries:
+            ref_max = ref.ideal_harvesters or 3
+            cap = min(desired_gas, ref_max)
+            effective_cap = cap if any_hall_can_take_gas_excess else ref_max
             assigned = ref_workers[ref.tag]
-            cap = min(desired_gas, ref.ideal_harvesters or 3)
-            if len(assigned) > cap:
-                excess = assigned[cap:]
-                ref_workers[ref.tag] = assigned[:cap]
-                for w in excess:
-                    if not w.is_carrying_vespene:
-                        free_workers.append(w)
+            if len(assigned) > effective_cap:
+                keep = list(assigned[:effective_cap])
+                kept_carrying: list[Unit] = []
+                for w in assigned[effective_cap:]:
+                    if w.is_carrying_vespene or w.is_carrying_minerals:
+                        kept_carrying.append(w)
+                    else:
+                        must_assign.append(w)
+                ref_workers[ref.tag] = keep + kept_carrying
 
-        # Pull excess mineral workers from over-saturated mineral lines.
-        for th in safe_halls:
-            ideal = min(24, max(1, len(patches_by_hall[th.tag]) * 2))
-            assigned = hall_workers[th.tag]
-            if len(assigned) > ideal:
-                excess = assigned[ideal:]
-                hall_workers[th.tag] = assigned[:ideal]
-                for w in excess:
-                    if not w.is_carrying_minerals:
-                        free_workers.append(w)
+        ref_deficits = {
+            ref.tag: max(
+                0,
+                min(desired_gas, ref.ideal_harvesters or 3) - len(ref_workers[ref.tag]),
+            )
+            for ref in safe_refineries
+        }
+        hall_deficits = {
+            th.tag: max(0, hall_ideals[th.tag] - len(hall_workers[th.tag]))
+            for th in safe_halls
+        }
+        total_deficit = sum(ref_deficits.values()) + sum(hall_deficits.values())
 
-        if not free_workers:
+        # Only pull excess mineral workers when another safe refinery/base actually has a deficit,
+        # or gently rebalance grossly uneven saturated bases without ever re-gathering onto the same base.
+        transfer_workers: list[Unit] = []
+        source_hall_by_tag: dict[int, int] = {}
+        if total_deficit > len(must_assign):
+            need_from_excess = total_deficit - len(must_assign)
+            for th in safe_halls:
+                if need_from_excess <= 0:
+                    break
+                ideal = hall_ideals[th.tag]
+                assigned = hall_workers[th.tag]
+                if len(assigned) <= ideal:
+                    continue
+                surplus = len(assigned) - ideal
+                take_limit = min(surplus, need_from_excess)
+                kept: list[Unit] = []
+                taken = 0
+                for w in assigned:
+                    if (
+                        taken < take_limit
+                        and not w.is_carrying_minerals
+                        and not w.is_carrying_vespene
+                    ):
+                        transfer_workers.append(w)
+                        source_hall_by_tag[w.tag] = th.tag
+                        taken += 1
+                        need_from_excess -= 1
+                    else:
+                        kept.append(w)
+                hall_workers[th.tag] = kept
+        elif total_deficit == 0 and len(safe_halls) >= 2:
+            most_sat = max(
+                safe_halls,
+                key=lambda th: len(hall_workers[th.tag]) - hall_ideals[th.tag],
+            )
+            least_sat = min(
+                safe_halls,
+                key=lambda th: len(hall_workers[th.tag]) - hall_ideals[th.tag],
+            )
+            most_count = len(hall_workers[most_sat.tag])
+            least_count = len(hall_workers[least_sat.tag])
+            if (
+                most_sat.tag != least_sat.tag
+                and most_count > hall_ideals[most_sat.tag]
+                and (most_count - least_count) >= 3
+            ):
+                transfer_count = (most_count - least_count) // 2
+                patches_dst = patches_by_hall[least_sat.tag]
+                kept_src: list[Unit] = []
+                moved = 0
+                for w in hall_workers[most_sat.tag]:
+                    if (
+                        moved < transfer_count
+                        and not w.is_carrying_minerals
+                        and not w.is_carrying_vespene
+                    ):
+                        w.gather(patches_dst[moved % len(patches_dst)])
+                        hall_workers[least_sat.tag].append(w)
+                        moved += 1
+                    else:
+                        kept_src.append(w)
+                hall_workers[most_sat.tag] = kept_src
+
+        must_assign_tags = {w.tag for w in must_assign}
+        assignable: list[Unit] = must_assign + transfer_workers
+        if not assignable:
             return
 
         # 1. Fill under-saturated safe refineries (when not gas-throttled).
         for ref in safe_refineries:
             cap = min(desired_gas, ref.ideal_harvesters or 3)
             needed = cap - len(ref_workers[ref.tag])
-            if needed <= 0 or not free_workers:
+            if needed <= 0 or not assignable:
                 continue
-            # Prefer workers without minerals on hand.
-            free_workers.sort(
+            # Prefer non-carrying workers and must-assign workers closest to the refinery.
+            assignable.sort(
                 key=lambda w: (
-                    1 if w.is_carrying_minerals else 0,
+                    1 if (w.is_carrying_minerals or w.is_carrying_vespene) else 0,
+                    0 if w.tag in must_assign_tags else 1,
                     w.distance_to(ref.position),
                 )
             )
-            for _ in range(min(needed, len(free_workers))):
-                w = free_workers.pop(0)
+            for _ in range(min(needed, len(assignable))):
+                w = assignable.pop(0)
                 w.gather(ref)
+                ref_workers[ref.tag].append(w)
 
         # 2. Fill under-saturated safe mineral bases.
         safe_halls_sorted = sorted(
             safe_halls,
-            key=lambda th: (
-                len(hall_workers[th.tag]) - min(24, len(patches_by_hall[th.tag]) * 2)
-            ),
+            key=lambda th: len(hall_workers[th.tag]) - hall_ideals[th.tag],
         )
         for th in safe_halls_sorted:
-            if not free_workers:
+            if not assignable:
                 break
-            ideal = min(24, max(1, len(patches_by_hall[th.tag]) * 2))
-            needed = ideal - len(hall_workers[th.tag])
+            needed = hall_ideals[th.tag] - len(hall_workers[th.tag])
             if needed <= 0:
                 continue
+            eligible = [
+                w for w in assignable if source_hall_by_tag.get(w.tag) != th.tag
+            ]
+            if not eligible:
+                continue
             patches = patches_by_hall[th.tag]
-            free_workers.sort(key=lambda w: w.distance_to(th.position))
-            for idx in range(min(needed, len(free_workers))):
-                w = free_workers.pop(0)
-                if w.is_carrying_minerals:
-                    w.return_resource()
+            eligible.sort(key=lambda w: w.distance_to(th.position))
+            for idx, w in enumerate(eligible[:needed]):
+                assignable.remove(w)
+                if w.is_carrying_minerals or w.is_carrying_vespene:
+                    nearest_hall = min(
+                        all_landed_halls,
+                        key=lambda h: h.distance_to(w.position),
+                        default=None,
+                    )
+                    if nearest_hall is not None and nearest_hall.tag in safe_hall_tags:
+                        if not w.is_returning:
+                            w.return_resource()
+                    else:
+                        w.gather(patches[idx % len(patches)])
                 else:
                     w.gather(patches[idx % len(patches)])
+                hall_workers[th.tag].append(w)
 
-        # 3. Any remaining free workers still go to the least-saturated safe mineral base.
-        if free_workers:
-            best_th = min(
-                safe_halls,
-                key=lambda th: (
-                    len(hall_workers[th.tag]) / max(1, len(patches_by_hall[th.tag]))
-                ),
-            )
-            patches = patches_by_hall[best_th.tag]
-            for idx, w in enumerate(free_workers):
-                if w.is_carrying_minerals:
-                    w.return_resource()
-                else:
+        # 3. Remaining truly free/idle/relocated workers go to the least-saturated safe base;
+        #    never disturb any leftover transfer_workers.
+        remaining_must = [w for w in assignable if w.tag in must_assign_tags]
+        if remaining_must:
+            for idx, w in enumerate(remaining_must):
+                best_th = min(
+                    safe_halls,
+                    key=lambda th: (
+                        len(hall_workers[th.tag]) / max(1, len(patches_by_hall[th.tag]))
+                    ),
+                )
+                patches = patches_by_hall[best_th.tag]
+                hall_workers[best_th.tag].append(w)
+                if w.is_carrying_minerals or w.is_carrying_vespene:
+                    nearest_hall = min(
+                        all_landed_halls,
+                        key=lambda h: h.distance_to(w.position),
+                        default=None,
+                    )
+                    if nearest_hall is not None and nearest_hall.tag in safe_hall_tags:
+                        if not w.is_returning:
+                            w.return_resource()
+                    else:
+                        w.gather(patches[idx % len(patches)])
+                elif w.order_target not in safe_mineral_tags_by_hall[best_th.tag]:
                     w.gather(patches[idx % len(patches)])
 
     def _manage_orbitals(

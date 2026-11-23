@@ -45,3 +45,15 @@ All checks in this round ran offline without launching StarCraft II:
 - **Offline mocks vs real SC2 engine**: Pathing geometry, exact SC2 `find_placement` grid clearance around `RedCityLE` main ramps/destructible rocks, and real-time combat DPS/micro spacing can only be fully verified in live `RedCityLE` (`5.0.17.98745`) matches.
 - **Extreme early cheese** (e.g., proxy 3-rax Reaper or 12-pool spine rush) relies on generic early-rush main-CC fallback, Bunker, and SCV pull; exact pull counts may need tuning after live replays.
 - **No Medivac drop harass / Ghost late-game**: Focused first on rock-solid macro, Bio-Tank-Medivac-Viking-Raven army control, and resilience rather than multi-prong Medivac drops or Ghost EMP/Snipe micro.
+
+## Round-Robin 2026-11-24 Iteration (`agent/antigravity-bot`)
+
+Based on forensic review of `results/round-robin-20261124/` replays and `burnysc2==7.3.0` engine behavior:
+
+1. **Worker Distribution & Returning-SCV Ping-Pong (`ag_terran/economy.py`, `ag_terran/macro.py`)**:
+   - Fixed `HARVEST_RETURN` (`order_target == 0` / `None`) misclassification and eliminated per-tick re-gathering of oversaturated mineral workers onto the main base, alongside softening gas throttling and aligning worker cap scaling (`16` per base + `3` per refinery + `2`).
+2. **Fog-of-War Expansion Blindness & Flying-CC Landing (`ag_terran/bases.py`, `ag_terran/placement.py`)**:
+   - Handled `is_snapshot` mineral fields in fog of war, recognized `burnysc2`-remapped `AbilityId.LAND` orders (preventing hover oscillation and self-exclusion in `choose_next_expansion`), and kept natural Bunker placement clear of CC landing footprints.
+3. **TechLab / Stimpack Priority & Endgame Closeout (`ag_terran/macro.py`, `ag_terran/intel.py`, `ag_terran/tactics.py`)**:
+   - Prioritized `_manage_addons` and `_manage_upgrades` ahead of `_train_army` with strict `STIMPACK -> SHIELDWALL -> PUNISHERGRENADES` sequencing and a short Stimpack mineral reservation.
+   - Tracked `enemy_main_ever_cleared` so undefended rebuilt structures do not drop a winning closeout army back into `RALLY`.

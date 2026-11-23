@@ -214,7 +214,7 @@ class PlacementManager:
         base_mgr: BaseManager,
         intel: IntelTracker,
     ) -> Point2 | None:
-        """Place a defensive Bunker at the front of the natural expansion."""
+        """Place a defensive Bunker at the front of the natural expansion without blocking CC landing."""
         nat = base_mgr.natural_location
         anchor = (
             nat if nat is not None else (base_mgr.main_location or bot.start_location)
@@ -222,14 +222,23 @@ class PlacementManager:
         enemy_dir = anchor.direction_vector(
             intel.confirmed_enemy_main or bot.game_info.map_center
         )
-        ideal = anchor + enemy_dir * 6.5
-        return await bot.find_placement(
-            UnitTypeId.BUNKER,
-            near=ideal,
-            max_distance=10,
-            random_alternative=False,
-            placement_step=1,
-        )
+        for dist in (6.5, 8.0, 9.5):
+            ideal = anchor + enemy_dir * dist
+            pos = await bot.find_placement(
+                UnitTypeId.BUNKER,
+                near=ideal,
+                max_distance=10,
+                random_alternative=False,
+                placement_step=1,
+            )
+            if pos is None:
+                continue
+            if nat is not None and pos.distance_to(nat) < 5.0:
+                continue
+            if self.is_near_mineral_line(bot, pos, min_dist=3.5):
+                continue
+            return pos
+        return None
 
     async def find_turret_position(
         self, bot: BotAI, townhall_pos: Point2

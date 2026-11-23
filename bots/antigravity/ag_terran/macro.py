@@ -175,13 +175,13 @@ class MacroManager:
             bot, intel, base_mgr, placement, economy, scout_worker_tag
         )
         if self._allow_non_cc_spend(bot, intel):
-            self._train_army(bot, intel)
+            await self._manage_addons(bot, intel)
             self._manage_upgrades(bot)
+            self._train_army(bot, intel)
             await self._manage_refineries(bot, base_mgr, economy, scout_worker_tag)
             await self._manage_production_and_tech(
                 bot, intel, base_mgr, placement, economy, scout_worker_tag
             )
-            await self._manage_addons(bot, intel)
 
     def _allow_non_cc_spend(self, bot: BotAI, intel: IntelTracker) -> bool:
         """Avoid draining saved minerals right before 2nd Command Center at 19+ supply."""
@@ -329,7 +329,7 @@ class MacroManager:
         ready_refs = len(bot.gas_buildings.ready)
         target_workers = min(
             self.config.max_workers,
-            max(22, safe_mineral_bases * 18 + ready_refs * 3 + 2),
+            max(22, safe_mineral_bases * 16 + ready_refs * 3 + 2),
         )
         current_workers = len(bot.workers) + int(bot.already_pending(UnitTypeId.SCV))
         if current_workers >= target_workers:
@@ -353,6 +353,35 @@ class MacroManager:
         if saving_for_nat_cc:
             return
 
+        # Hold a small one-time mineral reserve when Stimpack or first Barracks TechLab can start this step.
+        reapers_made = (
+            len(bot.units(UnitTypeId.REAPER))
+            + int(bot.already_pending(UnitTypeId.REAPER))
+            + bot._units_created.get(UnitTypeId.REAPER, 0)
+        )
+        reserve_minerals = 0
+        if (
+            bot.already_pending_upgrade(UpgradeId.STIMPACK) == 0
+            and bot.vespene >= 100
+            and any(
+                tl.is_idle and tl.tag not in bot.unit_tags_received_action
+                for tl in bot.structures(UnitTypeId.BARRACKSTECHLAB).ready
+            )
+        ):
+            reserve_minerals = 100
+        elif (
+            bot.vespene >= 25
+            and (reapers_made >= 1 or bot.time >= 130.0)
+            and (total_ccs >= 2 or len(bot.townhalls) >= 2 or bot.time >= 115.0)
+            and not bot.structures(UnitTypeId.BARRACKSTECHLAB)
+            and any(
+                not r.has_add_on and r.is_idle and not r.orders
+                for r in bot.structures(UnitTypeId.BARRACKS).ready
+            )
+        ):
+            reserve_minerals = 50
+
+        scv_cost = 50
         for th in bot.townhalls:
             if (
                 th.type_id not in TOWNHALL_LANDED_TYPES
@@ -370,6 +399,8 @@ class MacroManager:
                 and ccs_ready == 1
                 and bot.minerals >= 100
             ):
+                continue
+            if reserve_minerals > 0 and (bot.minerals - scv_cost) < reserve_minerals:
                 continue
             self._try_train(bot, th, UnitTypeId.SCV)
 
@@ -841,8 +872,15 @@ class MacroManager:
             {AbilityId.BUILD_REACTOR_BARRACKS, AbilityId.BUILD_REACTOR},
         )
 
-        # Wait to build 1st Barracks addon until after 1st Reaper or Marine has started/finished.
+        # Wait to build 1st Barracks addon until after 1st Reaper has started/finished.
+        reapers_made = (
+            len(bot.units(UnitTypeId.REAPER))
+            + int(bot.already_pending(UnitTypeId.REAPER))
+            + bot._units_created.get(UnitTypeId.REAPER, 0)
+        )
         rax_allow_addon = (
+            reapers_made >= 1 or intel.enemy_is_rushing or bot.time >= 130.0
+        ) and (
             self._count_planned(
                 bot, TOWNHALL_ALL_TYPES, AbilityId.TERRANBUILD_COMMANDCENTER
             )
@@ -982,19 +1020,17 @@ class MacroManager:
 
     def _manage_upgrades(self, bot: BotAI) -> None:
         """Research Bio upgrades, Engineering Bay +1/+1->+3/+3, and Armory vehicle upgrades."""
-        # Barracks Tech Lab upgrades: Stimpack -> Combat Shield -> Concussive Shells.
+        # Barracks Tech Lab upgrades: strictly Stimpack -> Combat Shield -> Concussive Shells.
         for upg in (
             UpgradeId.STIMPACK,
             UpgradeId.SHIELDWALL,
             UpgradeId.PUNISHERGRENADES,
         ):
-            if (
-                bot.already_pending_upgrade(upg) == 0
-                and bot.can_afford(upg)
-                and bot.structures(UnitTypeId.BARRACKSTECHLAB).ready
-                and bot.research(upg)
-            ):
-                break
+            if bot.already_pending_upgrade(upg) > 0:
+                continue
+            if bot.can_afford(upg) and bot.structures(UnitTypeId.BARRACKSTECHLAB).ready:
+                bot.research(upg)
+            break
 
         # Engineering Bay upgrades.
         if bot.structures(UnitTypeId.ENGINEERINGBAY).ready:
@@ -1170,6 +1206,19 @@ class MacroManager:
         marine_count = len(bot.units(UnitTypeId.MARINE)) + int(
             bot.already_pending(UnitTypeId.MARINE)
         )
+
+        saving_for_stim = (
+            not intel.enemy_is_rushing
+            and bot.already_pending_upgrade(UpgradeId.STIMPACK) == 0
+            and bot.vespene >= 100
+            and bot.minerals < 100
+            and any(
+                tl.is_idle and tl.tag not in bot.unit_tags_received_action
+                for tl in bot.structures(UnitTypeId.BARRACKSTECHLAB).ready
+            )
+        )
+        if saving_for_stim:
+            return
 
         for rax in bot.structures(UnitTypeId.BARRACKS).ready:
             if rax.tag in bot.unit_tags_received_action:

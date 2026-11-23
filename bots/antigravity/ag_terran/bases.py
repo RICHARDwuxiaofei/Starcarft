@@ -27,6 +27,13 @@ if TYPE_CHECKING:
     from sc2.bot_ai import BotAI
 
 
+def _estimate_mineral_contents(patch: Unit) -> int:
+    """Estimate remaining minerals for both visible patches and fog-of-war snapshots."""
+    if getattr(patch, "is_snapshot", False):
+        return 900
+    return int(getattr(patch, "mineral_contents", 0))
+
+
 class BaseStatus(Enum):
     """Operational safety classification for a landed Terran base."""
 
@@ -200,9 +207,7 @@ class BaseManager:
             friendly_power += unit_combat_value(th)
 
         patches = [m for m in bot.mineral_field if m.distance_to(pos) <= 10.5]
-        remaining_minerals = sum(
-            int(getattr(m, "mineral_contents", 0)) for m in patches
-        )
+        remaining_minerals = sum(_estimate_mineral_contents(m) for m in patches)
 
         prev_info = self.bases.get(th.tag)
         last_threat = self._last_threat_times.get(th.tag, -999.0)
@@ -379,17 +384,25 @@ class BaseManager:
             if th.tag in bot.unit_tags_received_action:
                 continue
 
-            # If already ordered to land somewhere safe, keep it if clear.
+            # If already ordered to land somewhere safe (checking both specific & remapped LAND), keep it if clear.
             existing_target = th.order_target
             if isinstance(existing_target, Point2) and any(
                 o.ability.id
-                in {AbilityId.LAND_COMMANDCENTER, AbilityId.LAND_ORBITALCOMMAND}
+                in {
+                    AbilityId.LAND,
+                    AbilityId.LAND_COMMANDCENTER,
+                    AbilityId.LAND_ORBITALCOMMAND,
+                }
                 for o in th.orders
             ):
+                existing_key = (round(existing_target.x), round(existing_target.y))
                 enemy_blocking = intel.estimate_enemy_power_near(
                     existing_target, 14.0, max_age=6.0, current_time=float(bot.time)
                 )
-                if enemy_blocking <= 0.5:
+                if (
+                    enemy_blocking <= 0.5
+                    and existing_key not in self.abandoned_expansions
+                ):
                     reserved_targets.append(existing_target)
                     continue
 
@@ -398,6 +411,7 @@ class BaseManager:
                 intel,
                 exclude_positions=reserved_targets,
                 allow_natural_priority=True,
+                ignore_townhall_tag=th.tag,
             )
             if target is not None:
                 reserved_targets.append(target)
@@ -421,13 +435,17 @@ class BaseManager:
         intel: IntelTracker,
         exclude_positions: list[Point2] | None = None,
         allow_natural_priority: bool = True,
+        ignore_townhall_tag: int | None = None,
     ) -> Point2 | None:
         """Select the safest profitable expansion away from enemy pressure."""
         excludes = list(exclude_positions or [])
         excludes.extend(self.reserved_expansion_targets.keys())
 
-        occupied_points = [th.position for th in bot.townhalls]
+        occupied_points: list[Point2] = []
         for th in bot.townhalls:
+            if th.tag == ignore_townhall_tag:
+                continue
+            occupied_points.append(th.position)
             if th.type_id in TOWNHALL_FLYING_TYPES and isinstance(
                 th.order_target, Point2
             ):
@@ -458,7 +476,7 @@ class BaseManager:
                 continue
 
             minerals_here = sum(
-                int(getattr(m, "mineral_contents", 0))
+                _estimate_mineral_contents(m)
                 for m in bot.mineral_field
                 if m.distance_to(pos) <= 10.5
             )

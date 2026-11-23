@@ -194,7 +194,10 @@ class TacticsManager:
             self.own_army_supply >= self.config.force_push_army_supply
             or bot.supply_used >= self.config.force_push_total_supply
         )
-        cleanup_push = intel.enemy_main_cleared and self.own_army_supply >= 16.0
+        cleanup_push = (
+            intel.enemy_main_cleared
+            or (intel.enemy_main_ever_cleared and self.known_enemy_power <= 2.0)
+        ) and self.own_army_supply >= 16.0
         keep_pushing = (
             self.posture in {ArmyPosture.ATTACK, ArmyPosture.RECLAIM}
             and self.own_army_supply >= 22.0

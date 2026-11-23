@@ -75,6 +75,7 @@ class IntelTracker:
         self.enemy_air_ratio: float = 0.0
         self.enemy_heavy_armor_ratio: float = 0.0
         self.enemy_main_cleared: bool = False
+        self.enemy_main_ever_cleared: bool = False
 
         self.visited_points: dict[tuple[int, int], float] = {}
         self.cleanup_targets: list[Point2] = []
@@ -202,6 +203,8 @@ class IntelTracker:
                     for s in known_structures
                 )
                 self.enemy_main_cleared = not has_struct_at_main
+                if self.enemy_main_cleared:
+                    self.enemy_main_ever_cleared = True
             elif self.enemy_main_cleared and any(
                 s.position.distance_to(self.confirmed_enemy_main) <= 18.0
                 for s in known_structures
