@@ -306,3 +306,50 @@ def test_evacuated_worker_resumes_mining_at_main_after_natural_is_lost():
     worker.gather.assert_called_once()
     assert worker.gather.call_args.args[0].tag in (71, 72)
     assert -natural.tag in bot._evacuation.zones
+
+
+def test_escape_finishes_before_switching_to_gather_after_crossing_edge():
+    from bots.mizuki.evacuation import EvacOrder
+
+    worker = scv(1, 142, 33, point(142, 24))
+    bot = fixture([worker])
+    bot._evacuation.zones = {501: SiegeZone(point(142, 50), 15.7, bot.time)}
+    bot._evacuation.sheltered.add(worker.tag)
+    bot._evacuation.orders[worker.tag] = EvacOrder(
+        "move", point(142, 24), bot.time - 1.1
+    )
+    # At the edge, an available mineral alone must not interrupt the active leg.
+    assert bot._evacuation.react(bot, bot.time) == 0
+    worker.gather.assert_not_called()
+    worker.move.assert_not_called()
+    worker.position = point(142, 24.8)
+    assert bot._evacuation.react(bot, bot.time + 1) == 1
+    assert worker.gather.call_args.args[0].tag in (71, 72)
+
+
+def test_new_fire_on_escape_route_allows_immediate_replan():
+    from bots.mizuki.evacuation import EvacOrder
+
+    worker = scv(1, 142, 32, point(142, 24))
+    bot = fixture([worker])
+    evac = bot._evacuation
+    evac.zones = {501: SiegeZone(point(142, 23), 5, bot.time)}
+    evac.sheltered.add(worker.tag)
+    evac.orders[worker.tag] = EvacOrder("move", point(142, 24), bot.time - 0.4)
+    assert evac.react(bot, bot.time) == 1
+    waypoint = worker.move.call_args.args[0]
+    assert waypoint != point(142, 24)
+    assert evac.avoids_fire(worker.position, waypoint)
+
+
+def test_unacknowledged_retreat_orders_do_not_stall_recovery():
+    from bots.mizuki.evacuation import EvacOrder
+
+    worker = scv(1, 142, 31)
+    bot = fixture([worker])
+    evac = bot._evacuation
+    evac.zones = {501: SiegeZone(point(142, 50), 15.7, bot.time)}
+    evac.sheltered.add(worker.tag)
+    evac.orders[worker.tag] = EvacOrder("move", point(142, 24), bot.time - 0.9)
+    assert evac.react(bot, bot.time) == 1
+    worker.gather.assert_called_once()

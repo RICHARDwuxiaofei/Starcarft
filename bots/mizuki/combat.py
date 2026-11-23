@@ -84,6 +84,7 @@ class _CombatState:
     unfinished_outer_tags: frozenset[int] = frozenset()
     post_handoff_until: float = 0.0
     outer_handoff_used: bool = False
+    local_regroup: dict[int, tuple[Point2, float]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -1002,6 +1003,99 @@ def _tank(
         _send(state, now, unit, AbilityId.UNSIEGE_UNSIEGE)
 
 
+def _local_regroups(
+    bot: BotAI,
+    state: _CombatState,
+    now: float,
+    ground: list[Unit],
+    enemies: list[Unit],
+    core: Point2,
+    home: Point2,
+    reserved: set[int],
+) -> dict[int, Point2]:
+    """Keep under-supported bio from recommitting to a locally lost fight."""
+    potential = [
+        (e, _strength([e]))
+        for e in enemies
+        if e.type_id not in _ECONOMY
+        and not e.is_flying
+        and (e.can_attack_ground or e.type_id in _STATIC | _HIGH_VALUE)
+    ]
+    state.local_regroup = {
+        tag: order for tag, order in state.local_regroup.items() if now < order[1]
+    }
+    if not potential and not state.local_regroup:
+        return {}
+    allies = [(u, _strength([u])) for u in ground if u.can_attack_ground]
+    moves: dict[int, Point2] = {}
+    for unit in ground:
+        if unit.type_id not in _BIO or unit.tag in reserved:
+            continue
+        contacts = [(e, power) for e, power in potential if unit.distance_to(e) <= 11.5]
+        if not contacts:
+            # A brief walk-out survives loss of vision without tracking hidden
+            # units; real visible reinforcements can release the gate immediately.
+            previous = state.local_regroup.get(unit.tag)
+            if previous:
+                moves[unit.tag] = previous[0]
+            continue
+        foes = [e for e, _ in contacts]
+        closest = min(foes, key=lambda e: (unit.distance_to(e), e.tag))
+        enemy_power = sum(weight for _, weight in contacts)
+        if enemy_power < 6 or unit.distance_to(closest) > 9.5:
+            previous = state.local_regroup.get(unit.tag)
+            if previous:
+                moves[unit.tag] = previous[0]
+            continue
+        own_power = sum(
+            weight
+            for ally, weight in allies
+            if ally.distance_to(unit) <= 9.5
+            or (
+                ally.type_id == U.SIEGETANKSIEGED
+                and ally.distance_to(unit) <= 13
+                and ally.target_in_range(closest)
+            )
+        )
+        if enemy_power <= 1.5 * own_power + 1:
+            state.local_regroup.pop(unit.tag, None)
+            continue
+
+        pos = unit.position
+        clearance = unit.distance_to(closest)
+
+        def safe_step(point: Point2, pos=pos, foes=foes, clearance=clearance) -> bool:
+            distance = pos.distance_to(point)
+            if distance < 2.4:
+                return False
+            midpoint = pos.towards(point, distance / 2)
+            return (
+                _inside(bot, point)
+                and bot.in_pathing_grid(point)
+                and bot.in_pathing_grid(midpoint)
+                and min(point.distance_to(e) for e in foes) > clearance + 1
+                and min(midpoint.distance_to(e) for e in foes) >= clearance - 0.25
+            )
+
+        step = None
+        for anchor in (core, home):
+            candidate = pos.towards(anchor, 5, limit=True)
+            if safe_step(candidate):
+                step = candidate
+                break
+        if step is None:
+            step = _away(bot, unit, closest, 5)
+            if step is not None and not safe_step(step):
+                step = None
+        if step is not None:
+            moves[unit.tag] = step
+            state.local_regroup[unit.tag] = (step, now + 3)
+        else:
+            # No safe retreat tile is a reason to hold range, not to charge.
+            moves[unit.tag] = unit.position
+    return moves
+
+
 def _infantry(
     bot: BotAI,
     state: _CombatState,
@@ -1424,6 +1518,18 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
         else None
     )
     zones = _hazards(bot)
+    if (
+        committing
+        and siege_guard is None
+        and any(not h.is_flying for h in bot.townhalls)
+    ):
+        regroup = _local_regroups(
+            bot, state, now, ground, enemies, center, home, reserve_tags
+        )
+    else:
+        # Theater-wide retreat, siege control, and cleanup already own these orders.
+        state.local_regroup.clear()
+        regroup = {}
     for unit in army:
         if _evade(bot, state, now, unit, zones):
             continue
@@ -1436,6 +1542,17 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
         if unit.type_id in _TANKS:
             _tank(state, now, unit, contacts, goal, withdrawing)
         elif unit.type_id in _BIO:
+            fallback = regroup.get(unit.tag)
+            if fallback is not None:
+                if unit.distance_to(fallback) > 1.3:
+                    _send(state, now, unit, "move", fallback)
+                else:
+                    target, in_range = _select(unit, contacts)
+                    if target and in_range:
+                        _send(state, now, unit, "attack", target)
+                    elif not unit.is_idle:
+                        _send(state, now, unit, AbilityId.HOLDPOSITION_HOLD)
+                continue
             _infantry(
                 bot,
                 state,

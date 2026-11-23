@@ -579,3 +579,86 @@ def test_handoff_keeps_post_when_natural_attack_starts_outside_tank_range():
     bot.time += 1
     asyncio.run(control_combat(bot, 6))
     assert tank.actions == [("attack", attacker)]
+
+
+def _parted_bio():
+    wing = [DummyUnit(i, U.MARINE, point(80, 80)) for i in (1, 2)]
+    core = [DummyUnit(i, U.MARINE, point(40, 40)) for i in range(10, 27)]
+    enemy = [DummyUnit(i, U.MARINE, point(84, 80)) for i in range(40, 48)]
+    target = DummyUnit(
+        51, U.BARRACKS, point(100, 100), is_structure=True, can_attack_ground=False
+    )
+    bot = dummy_bot(units=[*wing, *core], enemies=enemy, structures=[target], now=370)
+    return bot, wing, core, enemy
+
+
+def test_exposed_infantry_regroup_instead_of_counting_a_distant_army():
+    bot, wing, core, enemy = _parted_bio()
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.phase is _Phase.PRESSURE
+    for unit in wing:
+        action, retreat = unit.actions[0]
+        assert action == "move" and retreat.distance_to(enemy[0]) > 5
+        assert retreat.distance_to(core[0]) < unit.distance_to(core[0])
+    assert core[0].actions == [("attack", bot.enemy_structures[0].position)]
+
+
+def test_cohesion_holds_through_brief_visibility_loss_but_releases_for_reinforcement():
+    bot, wing, core, enemy = _parted_bio()
+    asyncio.run(control_combat(bot, 0))
+    fallback = wing[0].actions[0][1]
+    bot.enemy_units.clear()
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert wing[0].actions[-1] == ("move", fallback)
+    for reinforcement in core[:7]:
+        reinforcement.position = point(78, 78)
+    bot.enemy_units.extend(enemy)
+    bot.time += 1
+    asyncio.run(control_combat(bot, 4))
+    assert wing[0].actions[-1][0] == "attack"
+    assert wing[0].actions[-1][1] in enemy
+
+
+def test_local_siege_cover_allows_bio_to_trade_instead_of_regrouping():
+    bot, wing, _, enemy = _parted_bio()
+    tank = DummyUnit(55, U.SIEGETANKSIEGED, point(72, 80), ground_range=13)
+    bot.units.append(tank)
+    asyncio.run(control_combat(bot, 0))
+    assert wing[0].actions[0] == ("attack", enemy[0])
+    assert tank.actions[0] == ("attack", enemy[0])
+
+
+def test_no_safe_regroup_step_still_returns_fire():
+    bot, wing, _, enemy = _parted_bio()
+    bot.in_pathing_grid = lambda _: False
+    asyncio.run(control_combat(bot, 0))
+    assert wing[0].actions[0] == ("attack", enemy[0])
+
+
+def test_outnumbered_natural_defenders_peel_then_counterattack_together():
+    natural = DummyUnit(901, U.COMMANDCENTER, point(44, 42), is_structure=True)
+    pair = [DummyUnit(i, U.MARINE, point(49, 45)) for i in (1, 2)]
+    attackers = [DummyUnit(i, U.MARINE, point(52, 45)) for i in range(40, 48)]
+    bot = dummy_bot(units=pair, enemies=attackers, now=390)
+    bot.townhalls.append(natural)
+    asyncio.run(control_combat(bot, 0))
+    assert pair[0].actions[0][0] == "move"
+    assert pair[0].actions[0][1].x < pair[0].position.x
+    defenders = [DummyUnit(i, U.MARINE, point(44, 45)) for i in range(10, 19)]
+    bot.units.extend(defenders)
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert pair[0].actions[-1] == ("attack", attackers[0])
+
+
+def test_no_safe_regroup_step_does_not_chase_outside_weapon_range():
+    bot, wing, _, enemies = _parted_bio()
+    for enemy in enemies:
+        enemy.position = point(88, 80)
+    bot.in_pathing_grid = lambda _: False
+    asyncio.run(control_combat(bot, 0))
+    assert all(
+        not unit.actions or unit.actions[0][0] == AbilityId.HOLDPOSITION_HOLD
+        for unit in wing
+    )

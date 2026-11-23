@@ -74,11 +74,18 @@ def infantry_breach_zones(bot, infantry, now: float) -> dict[int, SiegeZone]:
     return zones
 
 
+@dataclass(frozen=True)
+class EvacOrder:
+    mode: str
+    destination: Point2
+    issued: float
+
+
 @dataclass
 class MineralLineEvacuation:
     zones: dict[int, SiegeZone] = field(default_factory=dict)
     sheltered: set[int] = field(default_factory=set)
-    orders: dict[int, tuple[Point2, float]] = field(default_factory=dict)
+    orders: dict[int, EvacOrder] = field(default_factory=dict)
     last_exposed: dict[int, float] = field(default_factory=dict)
 
     def update(
@@ -115,18 +122,49 @@ class MineralLineEvacuation:
             (zone.margin(point) for zone in self.zones.values()), default=float("inf")
         )
 
-    def avoids_fire(self, start: Point2, end: Point2) -> bool:
+    def avoids_fire(self, start: Point2, end: Point2, clearance: float = 0) -> bool:
         dx, dy = end.x - start.x, end.y - start.y
         length_sq = dx * dx + dy * dy
         if not length_sq:
-            return self.margin(start) >= 0
+            return self.margin(start) >= clearance
         for zone in self.zones.values():
             relative_x = zone.position.x - start.x
             relative_y = zone.position.y - start.y
             t = min(1.0, max(0.0, (relative_x * dx + relative_y * dy) / length_sq))
-            if (relative_x - t * dx) ** 2 + (relative_y - t * dy) ** 2 < zone.radius**2:
+            if (relative_x - t * dx) ** 2 + (relative_y - t * dy) ** 2 < (
+                zone.radius + clearance
+            ) ** 2:
                 return False
         return True
+
+    def _escape_keeps_clear(self, origin: Point2, samples: list[Point2]) -> bool:
+        return all(
+            zone.margin(p) >= min(zone.margin(origin) - 0.1, 0)
+            for zone in self.zones.values()
+            for p in samples
+        )
+
+    def _finish_escape(self, worker, previous: EvacOrder, now: float) -> bool:
+        """Commit to an observed escape leg unless new fire makes it worse."""
+        if previous.mode != "move":
+            return False
+        goal = previous.destination
+        distance = worker.distance_to(goal)
+        age = now - previous.issued
+        if distance <= 1.3 or age >= 4.0:
+            return False
+        target = worker.order_target
+        acknowledged = (
+            isinstance(target, Point2)
+            and target.distance_to(goal) <= 0.8
+            and not worker.is_idle
+        )
+        if not acknowledged and age >= 0.7:
+            return False
+        samples = [
+            worker.position.towards(goal, distance * f) for f in (0.25, 0.5, 0.75, 1)
+        ]
+        return self._escape_keeps_clear(worker.position, samples)
 
     def _escape(self, bot, worker, refuge) -> Point2 | None:
         origin = worker.position
@@ -152,11 +190,7 @@ class MineralLineEvacuation:
                     continue
                 # Every leg must make progress out of danger; do not cross a
                 # second tank's line (or initially move deeper into the first).
-                if any(
-                    min(zone.margin(origin) - 0.1, 0) > zone.margin(sample)
-                    for zone in self.zones.values()
-                    for sample in samples
-                ):
+                if not self._escape_keeps_clear(origin, samples):
                     continue
                 margin = self.margin(p)
                 if margin <= initial_margin + 0.75:
@@ -231,14 +265,21 @@ class MineralLineEvacuation:
                     self.last_exposed.pop(tag, None)
                     self.orders.pop(tag, None)
                 continue
-            if previous and now - previous[1] < 1 and not worker.is_idle:
+            if previous and self._finish_escape(worker, previous, now):
                 continue
-            destination = None
-            if self.margin(p) >= 0:
+            if (
+                previous
+                and now - previous.issued < 0.7
+                and not threatened
+                and not worker.is_idle
+            ):
+                continue
+            order = None
+            if self.margin(p) >= 1.5:
                 patches = [
                     patch
                     for patch in refuge_patches
-                    if self.avoids_fire(p, patch.position)
+                    if self.avoids_fire(p, patch.position, clearance=1.5)
                 ]
                 if patches:
                     patch = min(
@@ -249,20 +290,20 @@ class MineralLineEvacuation:
                         ),
                     )
                     if worker.gather(patch):
-                        destination = patch.position
+                        order = EvacOrder("gather", patch.position, now)
                         assignments[patch.tag] = assignments.get(patch.tag, 0) + 1
-            if destination is None and (threatened or self.margin(p) < 2):
+            if order is None and (threatened or self.margin(p) < 1.5):
                 waypoint = self._escape(bot, worker, safe_halls)
                 if waypoint is not None and worker.move(waypoint):
-                    destination = waypoint
+                    order = EvacOrder("move", waypoint, now)
                 elif (
                     threatened
                     and assigned_point is not None
                     and self.margin(p) >= 0
                     and worker.stop()
                 ):
-                    destination = p
-            if destination is not None:
-                self.orders[tag] = (destination, now)
+                    order = EvacOrder("stop", p, now)
+            if order is not None:
+                self.orders[tag] = order
                 new_orders += 1
         return new_orders
