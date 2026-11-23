@@ -33,7 +33,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--replay", type=Path)
     parser.add_argument(
-        "--swap", action="store_true", help="swap player registration order"
+        "--review-json",
+        type=Path,
+        help="turn the saved replay into an agent-ready digest",
     )
     parser.add_argument("--realtime", action="store_true")
     args = parser.parse_args(argv)
@@ -42,9 +44,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.replay is not None and not args.replay.parent.is_dir():
         parser.error("replay parent directory does not exist")
 
+    if args.review_json is not None:
+        if args.replay is None:
+            parser.error("--review-json requires --replay")
+        if (
+            args.review_json.suffix.lower() != ".json"
+            or args.review_json.resolve() == args.replay.resolve()
+        ):
+            parser.error("--review-json must be a .json file distinct from the replay")
+
     arena = maps.get(args.map)
     players = [
-        Bot(Race.Terran, CompetitiveBot()),
+        Bot(Race.Terran, CompetitiveBot(), name="Mizuki"),
         Computer(Race[args.race], Difficulty[args.difficulty]),
     ]
     outcome = run_game(
@@ -59,19 +70,23 @@ def main(argv: list[str] | None = None) -> int:
     if outcome is None:
         print("No SC2 result returned.")
         return 2
-    print(
-        json.dumps(
-            {
-                "bot": "mizuki",
-                "result": outcome.name,
-                "map": args.map,
-                "opponent": args.race,
-                "difficulty": args.difficulty,
-                "seed": args.seed,
-                "game_time_limit_seconds": args.seconds,
-            }
+    context = {
+        "bot": "mizuki",
+        "result": outcome.name,
+        "map": args.map,
+        "opponent": args.race,
+        "difficulty": args.difficulty,
+        "seed": args.seed,
+        "game_time_limit_seconds": args.seconds,
+        "realtime": args.realtime,
+    }
+    print(json.dumps(context))
+    if args.review_json is not None:
+        from .replay_review import main as review
+
+        return review(
+            [str(args.replay), "--out", str(args.review_json)], local_run=context
         )
-    )
     return 0
 
 

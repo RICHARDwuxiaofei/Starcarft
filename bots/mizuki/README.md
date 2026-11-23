@@ -29,3 +29,22 @@ py -3.12 -m bots.mizuki.smoke --map RedCityLE --race Terran --difficulty Medium 
 ## 验证边界
 
 无客户端测试覆盖入口、视野过滤、工人和人口决策、同帧人口/升级预算、扩张失败切换、交战状态与启动参数。云端没有与比赛一致的 Windows 游戏客户端，因此这里没有实战赛果，也不承诺胜率。第一轮建议分别跑 TvT、TvZ、TvP，检查开局不卡人口、二矿时点、第一批坦克/运输机时点、首战是否整个队伍跟上，然后每组用相同种子与交换出生点的基准复测。
+
+## 回放：只生成 AI 复盘 JSON
+
+安装一次额外依赖，使用同一套 Python 解释器；只分析回放时不用启动或安装游戏。仓库根目录 PowerShell：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r bots/mizuki/requirements-replay.txt
+.\.venv\Scripts\python.exe -m bots.mizuki.replay_review replays/mizuki-tvt-17.SC2Replay --out results/mizuki-review.json
+```
+
+或者让本机单局试跑直接在结束后生成 JSON：
+
+```powershell
+.\.venv\Scripts\python.exe -m bots.mizuki.smoke --map RedCityLE --race Terran --difficulty Medium --seed 17 --replay replays/mizuki-tvt-17.SC2Replay --review-json results/mizuki-review.json
+```
+
+把 `results/mizuki-review.json` 发给分析的 AI 即可。多个录像路径可以一次传入；报告依次列出地图、版本、胜负、开局、首个关键单位、各次扩张、经济/人口采样、损失和候选交战。不含聊天、账号 ID 或本机绝对路径；`--anonymous` 可再移除显示名称和原文件名。需要定位具体交战时加 `--include-events` 输出完整的规范化 tracker 时间线（比默认摘要大）。不上传录像、不调用在线服务，也不渲染网页。
+
+候选交战根据归因给对手的单位损失聚类，不代表所有交战；人口是采样，不能据此精确计算卡人口时长；回放不能说明 Bot 为什么下了某个指令。解析使用回放自己的 base build，不会用近似协议猜结果。单个录像失败会写入 `errors`，同批成功结果仍会保留；任何失败会返回非零退出码。
