@@ -1,0 +1,34 @@
+{
+  "players": {
+    "antigravity": {
+      "steps": 4068,
+      "game_seconds": 726.34,
+      "next_report": 780.0892857142858,
+      "death_events_observed": 348,
+      "player_id": 1,
+      "workers": 0,
+      "units": 0,
+      "enemy_at_home": 338.3,
+      "result": "Defeat"
+    },
+    "webgpt": {
+      "steps": 4068,
+      "game_seconds": 726.34,
+      "next_report": 780.0892857142858,
+      "death_events_observed": 354,
+      "player_id": 2,
+      "workers": 72,
+      "units": 171,
+      "enemy_at_home": 145.62,
+      "result": "Victory"
+    }
+  },
+  "error": null,
+  "wall_seconds": 170.64,
+  "pids": [
+    411260,
+    527992
+  ],
+  "replay": "match.SC2Replay",
+  "replay_bytes": 171104
+}

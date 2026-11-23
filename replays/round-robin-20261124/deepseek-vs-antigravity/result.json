@@ -1,0 +1,31 @@
+{
+  "players": {
+    "deepseek": {
+      "steps": 13036,
+      "game_seconds": 2327.72,
+      "next_report": 2340.044642857143,
+      "death_events_observed": 646,
+      "player_id": 1,
+      "workers": 0,
+      "units": 0,
+      "enemy_at_home": 80.58
+    },
+    "antigravity": {
+      "steps": 13036,
+      "game_seconds": 2327.72,
+      "next_report": 2340.044642857143,
+      "death_events_observed": 641,
+      "player_id": 2,
+      "workers": 52,
+      "units": 101
+    }
+  },
+  "error": "wall_timeout",
+  "wall_seconds": 598.45,
+  "pids": [
+    527884,
+    531632
+  ],
+  "replay": "wall-limit-checkpoint.SC2Replay",
+  "replay_bytes": 1580012
+}

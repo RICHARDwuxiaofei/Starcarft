@@ -1,0 +1,34 @@
+{
+  "players": {
+    "deepseek": {
+      "steps": 7187,
+      "game_seconds": 1283.3,
+      "next_report": 1320.0892857142858,
+      "death_events_observed": 504,
+      "player_id": 1,
+      "workers": 0,
+      "units": 0,
+      "enemy_at_home": 221.34,
+      "result": "Defeat"
+    },
+    "codex": {
+      "steps": 7187,
+      "game_seconds": 1283.3,
+      "next_report": 1320.0892857142858,
+      "death_events_observed": 531,
+      "player_id": 2,
+      "workers": 33,
+      "units": 185,
+      "enemy_at_home": 144.55,
+      "result": "Victory"
+    }
+  },
+  "error": null,
+  "wall_seconds": 209.55,
+  "pids": [
+    537680,
+    528012
+  ],
+  "replay": "match.SC2Replay",
+  "replay_bytes": 234446
+}

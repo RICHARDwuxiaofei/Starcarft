@@ -1,0 +1,2376 @@
+{
+  "map": "赤色城邦 - 天梯版",
+  "build": 98745,
+  "game_version": "5.0.17.98745",
+  "duration_seconds": 549.375,
+  "game_speed_code": 4,
+  "loops_per_second": 22.4,
+  "duration_loops": 12306,
+  "unmatched_tracker_player_ids": [],
+  "warnings": [],
+  "players": [
+    {
+      "id": 1,
+      "name": "webgpt",
+      "race": "人类",
+      "result": "win",
+      "team": 0,
+      "economy": {
+        "samples_seen": 78,
+        "bucket_seconds": 30,
+        "sample_selection": "last recording in each populated bucket, plus first recording",
+        "samples": [
+          {
+            "t": 0.044643,
+            "workers_active": 12,
+            "food_used": 13.0,
+            "food_made": 15.0,
+            "minerals_current": 0,
+            "vespene_current": 0,
+            "minerals_collection_rate": 0,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 28.571429,
+            "workers_active": 14,
+            "food_used": 15.0,
+            "food_made": 15.0,
+            "minerals_current": 5,
+            "vespene_current": 0,
+            "minerals_collection_rate": 615,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 57.142857,
+            "workers_active": 15,
+            "food_used": 16.0,
+            "food_made": 23.0,
+            "minerals_current": 145,
+            "vespene_current": 24,
+            "minerals_collection_rate": 755,
+            "vespene_collection_rate": 67,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 85.714286,
+            "workers_active": 17,
+            "food_used": 18.0,
+            "food_made": 23.0,
+            "minerals_current": 380,
+            "vespene_current": 84,
+            "minerals_collection_rate": 727,
+            "vespene_collection_rate": 134,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 114.285714,
+            "workers_active": 19,
+            "food_used": 20.0,
+            "food_made": 23.0,
+            "minerals_current": 260,
+            "vespene_current": 40,
+            "minerals_collection_rate": 783,
+            "vespene_collection_rate": 111,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 142.857143,
+            "workers_active": 20,
+            "food_used": 23.0,
+            "food_made": 31.0,
+            "minerals_current": 0,
+            "vespene_current": 17,
+            "minerals_collection_rate": 811,
+            "vespene_collection_rate": 89,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 178.571429,
+            "workers_active": 22,
+            "food_used": 28.0,
+            "food_made": 31.0,
+            "minerals_current": 65,
+            "vespene_current": 51,
+            "minerals_collection_rate": 1147,
+            "vespene_collection_rate": 156,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 207.142857,
+            "workers_active": 24,
+            "food_used": 31.0,
+            "food_made": 39.0,
+            "minerals_current": 80,
+            "vespene_current": 7,
+            "minerals_collection_rate": 1203,
+            "vespene_collection_rate": 111,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 235.714286,
+            "workers_active": 28,
+            "food_used": 38.0,
+            "food_made": 54.0,
+            "minerals_current": 90,
+            "vespene_current": 68,
+            "minerals_collection_rate": 1231,
+            "vespene_collection_rate": 335,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 264.285714,
+            "workers_active": 30,
+            "food_used": 44.0,
+            "food_made": 54.0,
+            "minerals_current": 120,
+            "vespene_current": 45,
+            "minerals_collection_rate": 1371,
+            "vespene_collection_rate": 313,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 292.857143,
+            "workers_active": 34,
+            "food_used": 55.0,
+            "food_made": 62.0,
+            "minerals_current": 200,
+            "vespene_current": 101,
+            "minerals_collection_rate": 1791,
+            "vespene_collection_rate": 313,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 328.571429,
+            "workers_active": 40,
+            "food_used": 74.0,
+            "food_made": 78.0,
+            "minerals_current": 20,
+            "vespene_current": 192,
+            "minerals_collection_rate": 1735,
+            "vespene_collection_rate": 425,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 357.142857,
+            "workers_active": 44,
+            "food_used": 84.0,
+            "food_made": 94.0,
+            "minerals_current": 75,
+            "vespene_current": 171,
+            "minerals_collection_rate": 2071,
+            "vespene_collection_rate": 425,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 385.714286,
+            "workers_active": 48,
+            "food_used": 93.0,
+            "food_made": 102.0,
+            "minerals_current": 55,
+            "vespene_current": 307,
+            "minerals_collection_rate": 2043,
+            "vespene_collection_rate": 492,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 414.285714,
+            "workers_active": 49,
+            "food_used": 92.0,
+            "food_made": 118.0,
+            "minerals_current": 130,
+            "vespene_current": 514,
+            "minerals_collection_rate": 2323,
+            "vespene_collection_rate": 492,
+            "minerals_lost": 650,
+            "vespene_lost": 0
+          },
+          {
+            "t": 442.857143,
+            "workers_active": 53,
+            "food_used": 100.0,
+            "food_made": 118.0,
+            "minerals_current": 305,
+            "vespene_current": 486,
+            "minerals_collection_rate": 2379,
+            "vespene_collection_rate": 537,
+            "minerals_lost": 900,
+            "vespene_lost": 0
+          },
+          {
+            "t": 478.571429,
+            "workers_active": 54,
+            "food_used": 118.0,
+            "food_made": 141.0,
+            "minerals_current": 275,
+            "vespene_current": 375,
+            "minerals_collection_rate": 2099,
+            "vespene_collection_rate": 559,
+            "minerals_lost": 900,
+            "vespene_lost": 0
+          },
+          {
+            "t": 507.142857,
+            "workers_active": 60,
+            "food_used": 138.0,
+            "food_made": 149.0,
+            "minerals_current": 85,
+            "vespene_current": 502,
+            "minerals_collection_rate": 2967,
+            "vespene_collection_rate": 515,
+            "minerals_lost": 900,
+            "vespene_lost": 0
+          },
+          {
+            "t": 535.714286,
+            "workers_active": 67,
+            "food_used": 154.0,
+            "food_made": 165.0,
+            "minerals_current": 185,
+            "vespene_current": 664,
+            "minerals_collection_rate": 3163,
+            "vespene_collection_rate": 694,
+            "minerals_lost": 900,
+            "vespene_lost": 0
+          },
+          {
+            "t": 549.285714,
+            "workers_active": 68,
+            "food_used": 161.0,
+            "food_made": 181.0,
+            "minerals_current": 65,
+            "vespene_current": 816,
+            "minerals_collection_rate": 3051,
+            "vespene_collection_rate": 694,
+            "minerals_lost": 900,
+            "vespene_lost": 0
+          }
+        ],
+        "sub_200_zero_headroom_sample_count": 5,
+        "sub_200_zero_headroom_sample_times_seconds": [
+          28.571429,
+          35.714286,
+          42.857143,
+          200.0,
+          521.428571
+        ],
+        "zero_headroom_times_truncated": false
+      },
+      "opening_events": [
+        {
+          "t": 11.294643,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 253,
+          "x": 39,
+          "y": 154,
+          "stage": "started",
+          "unit_tag": 60293121
+        },
+        {
+          "t": 27.410714,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 614,
+          "x": 32,
+          "y": 143,
+          "stage": "started",
+          "unit_tag": 61865985
+        },
+        {
+          "t": 32.723214,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 733,
+          "x": 39,
+          "y": 154,
+          "stage": "completed",
+          "unit_tag": 60293121
+        },
+        {
+          "t": 48.839286,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 1094,
+          "x": 32,
+          "y": 143,
+          "stage": "completed",
+          "unit_tag": 61865985
+        },
+        {
+          "t": 49.375,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 1106,
+          "unit_tag": 61865985,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 51.428571,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 1152,
+          "x": 31,
+          "y": 151,
+          "stage": "started",
+          "unit_tag": 63176705
+        },
+        {
+          "t": 97.857143,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 2192,
+          "x": 31,
+          "y": 151,
+          "stage": "completed",
+          "unit_tag": 63176705
+        },
+        {
+          "t": 99.464286,
+          "kind": "building",
+          "item": "Factory",
+          "loop": 2228,
+          "x": 36,
+          "y": 151,
+          "stage": "started",
+          "unit_tag": 65798145
+        },
+        {
+          "t": 101.5625,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 2275,
+          "x": 35,
+          "y": 140,
+          "stage": "started",
+          "unit_tag": 66322433
+        },
+        {
+          "t": 115.803571,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 2594,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 66846721
+        },
+        {
+          "t": 117.232143,
+          "kind": "building",
+          "item": "BarracksTechLab",
+          "loop": 2626,
+          "x": 34,
+          "y": 151,
+          "stage": "started",
+          "unit_tag": 67108865
+        },
+        {
+          "t": 122.991071,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 2755,
+          "x": 35,
+          "y": 140,
+          "stage": "completed",
+          "unit_tag": 66322433
+        },
+        {
+          "t": 123.660714,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 2770,
+          "unit_tag": 66322433,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 125.758929,
+          "kind": "type_change",
+          "item": "OrbitalCommand",
+          "loop": 2817,
+          "unit_tag": 53477377,
+          "previous_type": "CommandCenter"
+        },
+        {
+          "t": 129.375,
+          "kind": "type_change",
+          "item": "SupplyDepot",
+          "loop": 2898,
+          "unit_tag": 66322433,
+          "previous_type": "SupplyDepotLowered"
+        },
+        {
+          "t": 130.089286,
+          "kind": "type_change",
+          "item": "SupplyDepot",
+          "loop": 2914,
+          "unit_tag": 61865985,
+          "previous_type": "SupplyDepotLowered"
+        },
+        {
+          "t": 133.660714,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 2994,
+          "unit_tag": 66322433,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 133.660714,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 2994,
+          "unit_tag": 61865985,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 135.089286,
+          "kind": "building",
+          "item": "BarracksTechLab",
+          "loop": 3026,
+          "x": 34,
+          "y": 151,
+          "stage": "completed",
+          "unit_tag": 67108865
+        },
+        {
+          "t": 139.375,
+          "kind": "type_change",
+          "item": "SupplyDepot",
+          "loop": 3122,
+          "unit_tag": 61865985,
+          "previous_type": "SupplyDepotLowered"
+        },
+        {
+          "t": 142.321429,
+          "kind": "building",
+          "item": "Factory",
+          "loop": 3188,
+          "x": 36,
+          "y": 151,
+          "stage": "completed",
+          "unit_tag": 65798145
+        },
+        {
+          "t": 144.598214,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 3239,
+          "x": 19,
+          "y": 134,
+          "stage": "started",
+          "unit_tag": 67895297
+        },
+        {
+          "t": 144.598214,
+          "kind": "upgrade",
+          "item": "SprayTerran",
+          "loop": 3239
+        },
+        {
+          "t": 147.232143,
+          "kind": "type_change",
+          "item": "SupplyDepot",
+          "loop": 3298,
+          "unit_tag": 66322433,
+          "previous_type": "SupplyDepotLowered"
+        },
+        {
+          "t": 147.946429,
+          "kind": "building",
+          "item": "FactoryTechLab",
+          "loop": 3314,
+          "x": 39,
+          "y": 151,
+          "stage": "started",
+          "unit_tag": 68157441
+        },
+        {
+          "t": 157.232143,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 3522,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 68681729
+        },
+        {
+          "t": 161.517857,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 3618,
+          "unit_tag": 66322433,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 161.517857,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 3618,
+          "unit_tag": 61865985,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 163.348214,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 3659,
+          "x": 41,
+          "y": 151,
+          "stage": "started",
+          "unit_tag": 69206017
+        },
+        {
+          "t": 165.803571,
+          "kind": "building",
+          "item": "FactoryTechLab",
+          "loop": 3714,
+          "x": 39,
+          "y": 151,
+          "stage": "completed",
+          "unit_tag": 68157441
+        },
+        {
+          "t": 175.803571,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 3938,
+          "x": 32,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 69992449
+        },
+        {
+          "t": 178.660714,
+          "kind": "upgrade",
+          "item": "PunisherGrenades",
+          "loop": 4002
+        },
+        {
+          "t": 180.133929,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 4035,
+          "x": 25,
+          "y": 159,
+          "stage": "started",
+          "unit_tag": 70778881
+        },
+        {
+          "t": 180.714286,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 4048,
+          "x": 46,
+          "y": 149,
+          "stage": "started",
+          "unit_tag": 71041025
+        },
+        {
+          "t": 196.830357,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 4409,
+          "x": 43,
+          "y": 154,
+          "stage": "started",
+          "unit_tag": 72613889
+        },
+        {
+          "t": 197.946429,
+          "kind": "production",
+          "item": "Marauder",
+          "loop": 4434,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 72876033
+        },
+        {
+          "t": 201.5625,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 4515,
+          "x": 25,
+          "y": 159,
+          "stage": "completed",
+          "unit_tag": 70778881
+        },
+        {
+          "t": 202.142857,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 4528,
+          "x": 46,
+          "y": 149,
+          "stage": "completed",
+          "unit_tag": 71041025
+        },
+        {
+          "t": 202.232143,
+          "kind": "type_change",
+          "item": "SupplyDepotLowered",
+          "loop": 4530,
+          "unit_tag": 71041025,
+          "previous_type": "SupplyDepot"
+        },
+        {
+          "t": 206.651786,
+          "kind": "building",
+          "item": "Starport",
+          "loop": 4629,
+          "x": 25,
+          "y": 156,
+          "stage": "started",
+          "unit_tag": 73138177
+        },
+        {
+          "t": 209.776786,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 4699,
+          "x": 41,
+          "y": 151,
+          "stage": "completed",
+          "unit_tag": 69206017
+        },
+        {
+          "t": 216.026786,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 4839,
+          "x": 19,
+          "y": 134,
+          "stage": "completed",
+          "unit_tag": 67895297
+        },
+        {
+          "t": 216.026786,
+          "kind": "upgrade",
+          "item": "SprayTerran",
+          "loop": 4839
+        },
+        {
+          "t": 216.517857,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 4850,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 74186753
+        },
+        {
+          "t": 227.946429,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 5106,
+          "x": 41,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 75235329
+        },
+        {
+          "t": 228.660714,
+          "kind": "building",
+          "item": "BarracksReactor",
+          "loop": 5122,
+          "x": 44,
+          "y": 151,
+          "stage": "started",
+          "unit_tag": 75759617
+        },
+        {
+          "t": 238.660714,
+          "kind": "production",
+          "item": "Marauder",
+          "loop": 5346,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 76546049
+        },
+        {
+          "t": 242.366071,
+          "kind": "building",
+          "item": "Starport",
+          "loop": 5429,
+          "x": 25,
+          "y": 156,
+          "stage": "completed",
+          "unit_tag": 73138177
+        },
+        {
+          "t": 243.258929,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 5449,
+          "x": 43,
+          "y": 154,
+          "stage": "completed",
+          "unit_tag": 72613889
+        },
+        {
+          "t": 247.232143,
+          "kind": "building",
+          "item": "StarportTechLab",
+          "loop": 5538,
+          "x": 28,
+          "y": 156,
+          "stage": "started",
+          "unit_tag": 77856769
+        },
+        {
+          "t": 254.330357,
+          "kind": "type_change",
+          "item": "OrbitalCommand",
+          "loop": 5697,
+          "unit_tag": 67895297,
+          "previous_type": "CommandCenter"
+        },
+        {
+          "t": 257.232143,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 5762,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 72089602
+        },
+        {
+          "t": 258.794643,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 5797,
+          "x": 36,
+          "y": 157,
+          "stage": "started",
+          "unit_tag": 79429633
+        },
+        {
+          "t": 261.517857,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 5858,
+          "x": 43,
+          "y": 152,
+          "stage": "born",
+          "unit_tag": 79691777
+        },
+        {
+          "t": 263.303571,
+          "kind": "building",
+          "item": "BarracksReactor",
+          "loop": 5898,
+          "x": 46,
+          "y": 154,
+          "stage": "started",
+          "unit_tag": 79953921
+        },
+        {
+          "t": 264.375,
+          "kind": "building",
+          "item": "BarracksReactor",
+          "loop": 5922,
+          "x": 44,
+          "y": 151,
+          "stage": "completed",
+          "unit_tag": 75759617
+        },
+        {
+          "t": 265.089286,
+          "kind": "building",
+          "item": "StarportTechLab",
+          "loop": 5938,
+          "x": 28,
+          "y": 156,
+          "stage": "completed",
+          "unit_tag": 77856769
+        },
+        {
+          "t": 275.669643,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 6175,
+          "x": 36,
+          "y": 154,
+          "stage": "started",
+          "unit_tag": 81264641
+        },
+        {
+          "t": 275.803571,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 6178,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 81526785
+        },
+        {
+          "t": 280.223214,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 6277,
+          "x": 36,
+          "y": 157,
+          "stage": "completed",
+          "unit_tag": 79429633
+        }
+      ],
+      "opening_event_count": 69,
+      "milestones": [
+        {
+          "t": 115.803571,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 2594,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 66846721
+        },
+        {
+          "t": 144.598214,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 3239,
+          "x": 19,
+          "y": 134,
+          "stage": "started",
+          "unit_tag": 67895297
+        },
+        {
+          "t": 144.598214,
+          "kind": "upgrade",
+          "item": "SprayTerran",
+          "loop": 3239
+        },
+        {
+          "t": 178.660714,
+          "kind": "upgrade",
+          "item": "PunisherGrenades",
+          "loop": 4002
+        },
+        {
+          "t": 197.946429,
+          "kind": "production",
+          "item": "Marauder",
+          "loop": 4434,
+          "x": 31,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 72876033
+        },
+        {
+          "t": 216.026786,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 4839,
+          "x": 19,
+          "y": 134,
+          "stage": "completed",
+          "unit_tag": 67895297
+        },
+        {
+          "t": 304.375,
+          "kind": "production",
+          "item": "Medivac",
+          "loop": 6818,
+          "x": 25,
+          "y": 154,
+          "stage": "born",
+          "unit_tag": 86245377
+        },
+        {
+          "t": 342.232143,
+          "kind": "upgrade",
+          "item": "Stimpack",
+          "loop": 7666
+        },
+        {
+          "t": 421.517857,
+          "kind": "upgrade",
+          "item": "ShieldWall",
+          "loop": 9442
+        },
+        {
+          "t": 447.232143,
+          "kind": "production",
+          "item": "SiegeTank",
+          "loop": 10018,
+          "x": 35,
+          "y": 149,
+          "stage": "born",
+          "unit_tag": 74973186
+        },
+        {
+          "t": 469.375,
+          "kind": "upgrade",
+          "item": "TerranInfantryWeaponsLevel1",
+          "loop": 10514
+        },
+        {
+          "t": 533.660714,
+          "kind": "type_change",
+          "item": "SiegeTank",
+          "loop": 11954,
+          "unit_tag": 74973186,
+          "previous_type": "SiegeTankSieged"
+        },
+        {
+          "t": 542.946429,
+          "kind": "production",
+          "item": "Raven",
+          "loop": 12162,
+          "x": 25,
+          "y": 154,
+          "stage": "born",
+          "unit_tag": 102760468
+        }
+      ],
+      "milestone_count": 13,
+      "expansions": [
+        {
+          "t": 144.598214,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 3239,
+          "x": 19,
+          "y": 134,
+          "stage": "started",
+          "unit_tag": 67895297
+        },
+        {
+          "t": 216.026786,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 4839,
+          "x": 19,
+          "y": 134,
+          "stage": "completed",
+          "unit_tag": 67895297
+        },
+        {
+          "t": 395.535714,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 8860,
+          "x": 60,
+          "y": 138,
+          "stage": "started",
+          "unit_tag": 96993282
+        },
+        {
+          "t": 466.964286,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 10460,
+          "x": 60,
+          "y": 138,
+          "stage": "completed",
+          "unit_tag": 96993282
+        }
+      ],
+      "recorded_losses_by_type": {
+        "Marine": 17,
+        "MULE": 10,
+        "SCV": 1
+      },
+      "first_worker_losses": [
+        {
+          "t": 193.928571,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 4344,
+          "x": 37,
+          "y": 157,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 53477377,
+          "unit_tag": 67371009
+        },
+        {
+          "t": 256.607143,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 5748,
+          "x": 37,
+          "y": 158,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 53477377,
+          "unit_tag": 72089601
+        },
+        {
+          "t": 320.357143,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 7176,
+          "x": 33,
+          "y": 161,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 53477377,
+          "unit_tag": 78643201
+        },
+        {
+          "t": 322.321429,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 7220,
+          "x": 18,
+          "y": 139,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 67895297,
+          "unit_tag": 78905345
+        },
+        {
+          "t": 383.928571,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 8600,
+          "x": 31,
+          "y": 161,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 53477377,
+          "unit_tag": 88866817
+        },
+        {
+          "t": 385.178571,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 8628,
+          "x": 21,
+          "y": 139,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 67895297,
+          "unit_tag": 90439681
+        },
+        {
+          "t": 411.339286,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9214,
+          "x": 43,
+          "y": 29,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "Marine",
+          "killer_tag": 104071169,
+          "unit_tag": 64487425
+        },
+        {
+          "t": 447.455357,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 10023,
+          "x": 37,
+          "y": 157,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 53477377,
+          "unit_tag": 104333313
+        },
+        {
+          "t": 448.839286,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 10054,
+          "x": 19,
+          "y": 140,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 67895297,
+          "unit_tag": 104595457
+        },
+        {
+          "t": 511.071429,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 11448,
+          "x": 37,
+          "y": 158,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 53477377,
+          "unit_tag": 104071171
+        },
+        {
+          "t": 512.321429,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 11476,
+          "x": 14,
+          "y": 135,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 67895297,
+          "unit_tag": 102760452
+        }
+      ],
+      "losses_without_enemy_attribution": 10
+    },
+    {
+      "id": 2,
+      "name": "deepseek",
+      "race": "人类",
+      "result": "loss",
+      "team": 1,
+      "economy": {
+        "samples_seen": 78,
+        "bucket_seconds": 30,
+        "sample_selection": "last recording in each populated bucket, plus first recording",
+        "samples": [
+          {
+            "t": 0.044643,
+            "workers_active": 12,
+            "food_used": 13.0,
+            "food_made": 15.0,
+            "minerals_current": 0,
+            "vespene_current": 0,
+            "minerals_collection_rate": 0,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 28.571429,
+            "workers_active": 14,
+            "food_used": 15.0,
+            "food_made": 15.0,
+            "minerals_current": 75,
+            "vespene_current": 0,
+            "minerals_collection_rate": 643,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 57.142857,
+            "workers_active": 16,
+            "food_used": 16.0,
+            "food_made": 31.0,
+            "minerals_current": 30,
+            "vespene_current": 0,
+            "minerals_collection_rate": 559,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 85.714286,
+            "workers_active": 18,
+            "food_used": 19.0,
+            "food_made": 31.0,
+            "minerals_current": 230,
+            "vespene_current": 20,
+            "minerals_collection_rate": 699,
+            "vespene_collection_rate": 111,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 114.285714,
+            "workers_active": 20,
+            "food_used": 20.0,
+            "food_made": 31.0,
+            "minerals_current": 425,
+            "vespene_current": 96,
+            "minerals_collection_rate": 699,
+            "vespene_collection_rate": 156,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 142.857143,
+            "workers_active": 20,
+            "food_used": 20.0,
+            "food_made": 39.0,
+            "minerals_current": 800,
+            "vespene_current": 172,
+            "minerals_collection_rate": 811,
+            "vespene_collection_rate": 156,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 178.571429,
+            "workers_active": 21,
+            "food_used": 22.0,
+            "food_made": 39.0,
+            "minerals_current": 430,
+            "vespene_current": 272,
+            "minerals_collection_rate": 699,
+            "vespene_collection_rate": 179,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 207.142857,
+            "workers_active": 23,
+            "food_used": 24.0,
+            "food_made": 39.0,
+            "minerals_current": 715,
+            "vespene_current": 348,
+            "minerals_collection_rate": 727,
+            "vespene_collection_rate": 156,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 235.714286,
+            "workers_active": 26,
+            "food_used": 28.0,
+            "food_made": 54.0,
+            "minerals_current": 585,
+            "vespene_current": 232,
+            "minerals_collection_rate": 811,
+            "vespene_collection_rate": 179,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 264.285714,
+            "workers_active": 28,
+            "food_used": 28.0,
+            "food_made": 54.0,
+            "minerals_current": 300,
+            "vespene_current": 304,
+            "minerals_collection_rate": 1035,
+            "vespene_collection_rate": 156,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 292.857143,
+            "workers_active": 31,
+            "food_used": 33.0,
+            "food_made": 54.0,
+            "minerals_current": 660,
+            "vespene_current": 392,
+            "minerals_collection_rate": 1483,
+            "vespene_collection_rate": 223,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 328.571429,
+            "workers_active": 36,
+            "food_used": 43.0,
+            "food_made": 54.0,
+            "minerals_current": 625,
+            "vespene_current": 193,
+            "minerals_collection_rate": 1791,
+            "vespene_collection_rate": 335,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 357.142857,
+            "workers_active": 41,
+            "food_used": 54.0,
+            "food_made": 54.0,
+            "minerals_current": 545,
+            "vespene_current": 10,
+            "minerals_collection_rate": 1819,
+            "vespene_collection_rate": 156,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 385.714286,
+            "workers_active": 43,
+            "food_used": 62.0,
+            "food_made": 62.0,
+            "minerals_current": 855,
+            "vespene_current": 137,
+            "minerals_collection_rate": 2071,
+            "vespene_collection_rate": 313,
+            "minerals_lost": 0,
+            "vespene_lost": 0
+          },
+          {
+            "t": 414.285714,
+            "workers_active": 28,
+            "food_used": 49.0,
+            "food_made": 70.0,
+            "minerals_current": 550,
+            "vespene_current": 88,
+            "minerals_collection_rate": 1203,
+            "vespene_collection_rate": 291,
+            "minerals_lost": 1600,
+            "vespene_lost": 150
+          },
+          {
+            "t": 442.857143,
+            "workers_active": 13,
+            "food_used": 26.0,
+            "food_made": 78.0,
+            "minerals_current": 135,
+            "vespene_current": 20,
+            "minerals_collection_rate": 363,
+            "vespene_collection_rate": 44,
+            "minerals_lost": 3400,
+            "vespene_lost": 275
+          },
+          {
+            "t": 478.571429,
+            "workers_active": 1,
+            "food_used": 5.0,
+            "food_made": 55.0,
+            "minerals_current": 35,
+            "vespene_current": 20,
+            "minerals_collection_rate": 139,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 5675,
+            "vespene_lost": 375
+          },
+          {
+            "t": 507.142857,
+            "workers_active": 0,
+            "food_used": 1.0,
+            "food_made": 47.0,
+            "minerals_current": 15,
+            "vespene_current": 20,
+            "minerals_collection_rate": 139,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 6450,
+            "vespene_lost": 700
+          },
+          {
+            "t": 535.714286,
+            "workers_active": 0,
+            "food_used": 0.0,
+            "food_made": 0.0,
+            "minerals_current": 65,
+            "vespene_current": 20,
+            "minerals_collection_rate": 139,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 8125,
+            "vespene_lost": 800
+          },
+          {
+            "t": 549.285714,
+            "workers_active": 0,
+            "food_used": 0.0,
+            "food_made": 0.0,
+            "minerals_current": 65,
+            "vespene_current": 20,
+            "minerals_collection_rate": 0,
+            "vespene_collection_rate": 0,
+            "minerals_lost": 8650,
+            "vespene_lost": 1000
+          }
+        ],
+        "sub_200_zero_headroom_sample_count": 9,
+        "sub_200_zero_headroom_sample_times_seconds": [
+          28.571429,
+          35.714286,
+          350.0,
+          357.142857,
+          364.285714,
+          371.428571,
+          378.571429,
+          385.714286,
+          392.857143
+        ],
+        "zero_headroom_times_truncated": false
+      },
+      "opening_events": [
+        {
+          "t": 18.973214,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 425,
+          "x": 20,
+          "y": 29,
+          "stage": "started",
+          "unit_tag": 61079553
+        },
+        {
+          "t": 31.517857,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 706,
+          "x": 20,
+          "y": 37,
+          "stage": "started",
+          "unit_tag": 62128129
+        },
+        {
+          "t": 40.401786,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 905,
+          "x": 20,
+          "y": 29,
+          "stage": "completed",
+          "unit_tag": 61079553
+        },
+        {
+          "t": 47.767857,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 1070,
+          "x": 15,
+          "y": 32,
+          "stage": "started",
+          "unit_tag": 62914561
+        },
+        {
+          "t": 52.946429,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 1186,
+          "x": 20,
+          "y": 37,
+          "stage": "completed",
+          "unit_tag": 62128129
+        },
+        {
+          "t": 54.196429,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 1214,
+          "x": 19,
+          "y": 39,
+          "stage": "started",
+          "unit_tag": 63700993
+        },
+        {
+          "t": 75.625,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 1694,
+          "x": 19,
+          "y": 39,
+          "stage": "completed",
+          "unit_tag": 63700993
+        },
+        {
+          "t": 94.196429,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 2110,
+          "x": 15,
+          "y": 32,
+          "stage": "completed",
+          "unit_tag": 62914561
+        },
+        {
+          "t": 98.169643,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 2199,
+          "x": 24,
+          "y": 33,
+          "stage": "started",
+          "unit_tag": 65536001
+        },
+        {
+          "t": 119.598214,
+          "kind": "building",
+          "item": "SupplyDepot",
+          "loop": 2679,
+          "x": 24,
+          "y": 33,
+          "stage": "completed",
+          "unit_tag": 65536001
+        },
+        {
+          "t": 158.75,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 3556,
+          "x": 41,
+          "y": 19,
+          "stage": "started",
+          "unit_tag": 68943873
+        },
+        {
+          "t": 158.75,
+          "kind": "upgrade",
+          "item": "SprayTerran",
+          "loop": 3556
+        },
+        {
+          "t": 176.205357,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 3947,
+          "x": 43,
+          "y": 12,
+          "stage": "started",
+          "unit_tag": 70254593
+        },
+        {
+          "t": 185.625,
+          "kind": "building",
+          "item": "Bunker",
+          "loop": 4158,
+          "x": 41,
+          "y": 23,
+          "stage": "started",
+          "unit_tag": 71565313
+        },
+        {
+          "t": 187.1875,
+          "kind": "building",
+          "item": "Bunker",
+          "loop": 4193,
+          "x": 41,
+          "y": 15,
+          "stage": "started",
+          "unit_tag": 71827457
+        },
+        {
+          "t": 197.633929,
+          "kind": "building",
+          "item": "Refinery",
+          "loop": 4427,
+          "x": 43,
+          "y": 12,
+          "stage": "completed",
+          "unit_tag": 70254593
+        },
+        {
+          "t": 214.196429,
+          "kind": "building",
+          "item": "Bunker",
+          "loop": 4798,
+          "x": 41,
+          "y": 23,
+          "stage": "completed",
+          "unit_tag": 71565313
+        },
+        {
+          "t": 215.491071,
+          "kind": "building",
+          "item": "Factory",
+          "loop": 4827,
+          "x": 37,
+          "y": 19,
+          "stage": "started",
+          "unit_tag": 73924609
+        },
+        {
+          "t": 215.758929,
+          "kind": "building",
+          "item": "Bunker",
+          "loop": 4833,
+          "x": 41,
+          "y": 15,
+          "stage": "completed",
+          "unit_tag": 71827457
+        },
+        {
+          "t": 220.044643,
+          "kind": "building",
+          "item": "Factory",
+          "loop": 4929,
+          "x": 17,
+          "y": 28,
+          "stage": "started",
+          "unit_tag": 74448897
+        },
+        {
+          "t": 230.178571,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 5156,
+          "x": 41,
+          "y": 19,
+          "stage": "completed",
+          "unit_tag": 68943873
+        },
+        {
+          "t": 230.178571,
+          "kind": "upgrade",
+          "item": "SprayTerran",
+          "loop": 5156
+        },
+        {
+          "t": 241.785714,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 5416,
+          "x": 17,
+          "y": 36,
+          "stage": "started",
+          "unit_tag": 76808193
+        },
+        {
+          "t": 250.803571,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 5618,
+          "x": 23,
+          "y": 36,
+          "stage": "started",
+          "unit_tag": 78118913
+        },
+        {
+          "t": 252.053571,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 5646,
+          "x": 23,
+          "y": 30,
+          "stage": "started",
+          "unit_tag": 78381057
+        },
+        {
+          "t": 258.348214,
+          "kind": "building",
+          "item": "Factory",
+          "loop": 5787,
+          "x": 37,
+          "y": 19,
+          "stage": "completed",
+          "unit_tag": 73924609
+        },
+        {
+          "t": 262.901786,
+          "kind": "building",
+          "item": "Factory",
+          "loop": 5889,
+          "x": 17,
+          "y": 28,
+          "stage": "completed",
+          "unit_tag": 74448897
+        },
+        {
+          "t": 267.544643,
+          "kind": "type_change",
+          "item": "OrbitalCommand",
+          "loop": 5993,
+          "unit_tag": 68943873,
+          "previous_type": "CommandCenter"
+        },
+        {
+          "t": 270.044643,
+          "kind": "type_change",
+          "item": "OrbitalCommand",
+          "loop": 6049,
+          "unit_tag": 56885249,
+          "previous_type": "CommandCenter"
+        },
+        {
+          "t": 288.214286,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 6456,
+          "x": 17,
+          "y": 36,
+          "stage": "completed",
+          "unit_tag": 76808193
+        },
+        {
+          "t": 297.232143,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 6658,
+          "x": 23,
+          "y": 36,
+          "stage": "completed",
+          "unit_tag": 78118913
+        },
+        {
+          "t": 297.410714,
+          "kind": "building",
+          "item": "BarracksTechLab",
+          "loop": 6662,
+          "x": 26,
+          "y": 36,
+          "stage": "started",
+          "unit_tag": 85196801
+        },
+        {
+          "t": 298.482143,
+          "kind": "building",
+          "item": "Barracks",
+          "loop": 6686,
+          "x": 23,
+          "y": 30,
+          "stage": "completed",
+          "unit_tag": 78381057
+        },
+        {
+          "t": 298.660714,
+          "kind": "building",
+          "item": "BarracksReactor",
+          "loop": 6690,
+          "x": 26,
+          "y": 30,
+          "stage": "started",
+          "unit_tag": 85458945
+        }
+      ],
+      "opening_event_count": 34,
+      "milestones": [
+        {
+          "t": 158.75,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 3556,
+          "x": 41,
+          "y": 19,
+          "stage": "started",
+          "unit_tag": 68943873
+        },
+        {
+          "t": 158.75,
+          "kind": "upgrade",
+          "item": "SprayTerran",
+          "loop": 3556
+        },
+        {
+          "t": 230.178571,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 5156,
+          "x": 41,
+          "y": 19,
+          "stage": "completed",
+          "unit_tag": 68943873
+        },
+        {
+          "t": 315.446429,
+          "kind": "production",
+          "item": "Marine",
+          "loop": 7066,
+          "x": 15,
+          "y": 30,
+          "stage": "born",
+          "unit_tag": 88342529
+        },
+        {
+          "t": 354.910714,
+          "kind": "production",
+          "item": "Marauder",
+          "loop": 7950,
+          "x": 23,
+          "y": 34,
+          "stage": "born",
+          "unit_tag": 98304001
+        },
+        {
+          "t": 372.946429,
+          "kind": "production",
+          "item": "Medivac",
+          "loop": 8354,
+          "x": 21,
+          "y": 24,
+          "stage": "born",
+          "unit_tag": 101449729
+        },
+        {
+          "t": 415.446429,
+          "kind": "upgrade",
+          "item": "Stimpack",
+          "loop": 9306
+        },
+        {
+          "t": 497.946429,
+          "kind": "upgrade",
+          "item": "ShieldWall",
+          "loop": 11154
+        }
+      ],
+      "milestone_count": 8,
+      "expansions": [
+        {
+          "t": 158.75,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 3556,
+          "x": 41,
+          "y": 19,
+          "stage": "started",
+          "unit_tag": 68943873
+        },
+        {
+          "t": 230.178571,
+          "kind": "expansion",
+          "item": "CommandCenter",
+          "loop": 5156,
+          "x": 41,
+          "y": 19,
+          "stage": "completed",
+          "unit_tag": 68943873
+        }
+      ],
+      "recorded_losses_by_type": {
+        "SCV": 58,
+        "Marine": 29,
+        "MULE": 9,
+        "SupplyDepot": 6,
+        "Barracks": 4,
+        "Medivac": 4,
+        "Marauder": 3,
+        "Refinery": 3,
+        "Bunker": 2,
+        "Factory": 2,
+        "OrbitalCommand": 2,
+        "Starport": 2,
+        "BarracksReactor": 1,
+        "BarracksTechLab": 1,
+        "EngineeringBay": 1,
+        "StarportReactor": 1
+      },
+      "first_worker_losses": [
+        {
+          "t": 337.321429,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 7556,
+          "x": 38,
+          "y": 12,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 68943873,
+          "unit_tag": 80478209
+        },
+        {
+          "t": 338.928571,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 7592,
+          "x": 16,
+          "y": 34,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 56885249,
+          "unit_tag": 81002497
+        },
+        {
+          "t": 398.4375,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 8925,
+          "x": 39,
+          "y": 14,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 68943873,
+          "unit_tag": 92012545
+        },
+        {
+          "t": 400.892857,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 8980,
+          "x": 16,
+          "y": 34,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "OrbitalCommand",
+          "killer_tag": 56885249,
+          "unit_tag": 93585409
+        },
+        {
+          "t": 401.696429,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 8998,
+          "x": 40,
+          "y": 29,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 90963969,
+          "unit_tag": 57671681
+        },
+        {
+          "t": 402.544643,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9017,
+          "x": 45,
+          "y": 28,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 76546049,
+          "unit_tag": 58195969
+        },
+        {
+          "t": 403.303571,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9034,
+          "x": 44,
+          "y": 29,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 81526785,
+          "unit_tag": 58982401
+        },
+        {
+          "t": 404.375,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9058,
+          "x": 43,
+          "y": 28,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 79691777,
+          "unit_tag": 58458113
+        },
+        {
+          "t": 405.089286,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9074,
+          "x": 42,
+          "y": 30,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 90963969,
+          "unit_tag": 64749569
+        },
+        {
+          "t": 406.294643,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9101,
+          "x": 43,
+          "y": 26,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 72876033,
+          "unit_tag": 98566145
+        },
+        {
+          "t": 406.875,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9114,
+          "x": 43,
+          "y": 28,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 90963969,
+          "unit_tag": 77332481
+        },
+        {
+          "t": 407.366071,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 9125,
+          "x": 42,
+          "y": 29,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 72876033,
+          "unit_tag": 89128961
+        }
+      ],
+      "losses_without_enemy_attribution": 8
+    }
+  ],
+  "engagement_candidates": [
+    {
+      "location_estimate_xy": [
+        43.3,
+        28.2
+      ],
+      "loss_locations_seen": 105,
+      "start_t": 395.178571,
+      "end_t": 464.196429,
+      "recorded_losses": 105,
+      "losses_by_player": {
+        "1": {
+          "units": {
+            "Marine": 17,
+            "SCV": 1
+          },
+          "workers": 1,
+          "structures": 0
+        },
+        "2": {
+          "units": {
+            "SCV": 53,
+            "Marine": 26,
+            "Marauder": 3,
+            "Medivac": 3,
+            "Bunker": 1,
+            "EngineeringBay": 1
+          },
+          "workers": 53,
+          "structures": 2
+        }
+      },
+      "first_losses": [
+        {
+          "t": 395.178571,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 8852,
+          "x": 43,
+          "y": 31,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "Marine",
+          "killer_tag": 96993281,
+          "unit_tag": 82575361,
+          "player": 1
+        },
+        {
+          "t": 395.357143,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 8856,
+          "x": 40,
+          "y": 26,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 76546049,
+          "unit_tag": 96993281,
+          "player": 2
+        },
+        {
+          "t": 395.848214,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 8867,
+          "x": 43,
+          "y": 30,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "Marine",
+          "killer_tag": 104071169,
+          "unit_tag": 85721089,
+          "player": 1
+        },
+        {
+          "t": 396.160714,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 8874,
+          "x": 39,
+          "y": 27,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 75235329,
+          "unit_tag": 97255425,
+          "player": 2
+        },
+        {
+          "t": 396.607143,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 8884,
+          "x": 43,
+          "y": 30,
+          "stage": "destroyed",
+          "killer_player": 2,
+          "killer_type": "Marine",
+          "killer_tag": 93323265,
+          "unit_tag": 69992449,
+          "player": 1
+        }
+      ]
+    },
+    {
+      "location_estimate_xy": [
+        29.9,
+        28.6
+      ],
+      "loss_locations_seen": 28,
+      "start_t": 469.330357,
+      "end_t": 534.642857,
+      "recorded_losses": 28,
+      "losses_by_player": {
+        "2": {
+          "units": {
+            "SCV": 5,
+            "SupplyDepot": 5,
+            "Barracks": 3,
+            "Marine": 3,
+            "OrbitalCommand": 2,
+            "Refinery": 2,
+            "BarracksReactor": 1,
+            "BarracksTechLab": 1,
+            "Bunker": 1,
+            "Factory": 1,
+            "MULE": 1,
+            "Medivac": 1,
+            "Starport": 1,
+            "StarportReactor": 1
+          },
+          "workers": 6,
+          "structures": 18
+        }
+      },
+      "first_losses": [
+        {
+          "t": 469.330357,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 10513,
+          "x": 40,
+          "y": 26,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 81526785,
+          "unit_tag": 59506696,
+          "player": 2
+        },
+        {
+          "t": 469.821429,
+          "kind": "loss",
+          "item": "Marine",
+          "loop": 10524,
+          "x": 41,
+          "y": 27,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 75235329,
+          "unit_tag": 57147410,
+          "player": 2
+        },
+        {
+          "t": 471.5625,
+          "kind": "loss",
+          "item": "OrbitalCommand",
+          "loop": 10563,
+          "x": 41,
+          "y": 19,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 99090433,
+          "unit_tag": 68943873,
+          "player": 2
+        },
+        {
+          "t": 473.705357,
+          "kind": "loss",
+          "item": "SupplyDepot",
+          "loop": 10611,
+          "x": 44,
+          "y": 16,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 89915393,
+          "unit_tag": 81002498,
+          "player": 2
+        },
+        {
+          "t": 474.017857,
+          "kind": "loss",
+          "item": "SCV",
+          "loop": 10618,
+          "x": 41,
+          "y": 19,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 94109699,
+          "unit_tag": 60030992,
+          "player": 2
+        }
+      ]
+    },
+    {
+      "location_estimate_xy": [
+        16.4,
+        28.2
+      ],
+      "loss_locations_seen": 5,
+      "start_t": 540.267857,
+      "end_t": 549.285714,
+      "recorded_losses": 5,
+      "losses_by_player": {
+        "2": {
+          "units": {
+            "Barracks": 1,
+            "Factory": 1,
+            "MULE": 1,
+            "Refinery": 1,
+            "Starport": 1
+          },
+          "workers": 1,
+          "structures": 4
+        }
+      },
+      "first_losses": [
+        {
+          "t": 540.267857,
+          "kind": "loss",
+          "item": "Barracks",
+          "loop": 12102,
+          "x": 15,
+          "y": 32,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 76546049,
+          "unit_tag": 62914561,
+          "player": 2
+        },
+        {
+          "t": 542.8125,
+          "kind": "loss",
+          "item": "MULE",
+          "loop": 12159,
+          "x": 14,
+          "y": 30,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 62390278,
+          "unit_tag": 102760467,
+          "player": 2
+        },
+        {
+          "t": 542.946429,
+          "kind": "loss",
+          "item": "Starport",
+          "loop": 12162,
+          "x": 21,
+          "y": 26,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marauder",
+          "killer_tag": 87031818,
+          "unit_tag": 87293953,
+          "player": 2
+        },
+        {
+          "t": 546.160714,
+          "kind": "loss",
+          "item": "Factory",
+          "loop": 12234,
+          "x": 17,
+          "y": 28,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 95420419,
+          "unit_tag": 74448897,
+          "player": 2
+        },
+        {
+          "t": 549.285714,
+          "kind": "loss",
+          "item": "Refinery",
+          "loop": 12304,
+          "x": 15,
+          "y": 25,
+          "stage": "destroyed",
+          "killer_player": 1,
+          "killer_type": "Marine",
+          "killer_tag": 72351746,
+          "unit_tag": 99614721,
+          "player": 2
+        }
+      ]
+    }
+  ],
+  "engagement_candidate_count": 3,
+  "event_counts": {
+    "production": 247,
+    "loss": 159,
+    "stats": 156,
+    "building": 131,
+    "initial": 56,
+    "type_change": 34,
+    "upgrade": 16,
+    "expansion": 6
+  },
+  "recorded_commands_by_game_minute": {
+    "webgpt": {
+      "0": 12,
+      "1": 21,
+      "2": 69,
+      "3": 49,
+      "4": 115,
+      "5": 276,
+      "6": 1041,
+      "7": 1589,
+      "8": 900,
+      "9": 164
+    },
+    "deepseek": {
+      "0": 10,
+      "1": 5,
+      "2": 6,
+      "3": 10,
+      "4": 26,
+      "5": 42,
+      "6": 192,
+      "7": 485,
+      "8": 20
+    }
+  },
+  "longest_gaps_without_recorded_enemy_kills_seconds": [
+    [
+      240,
+      395.18
+    ]
+  ],
+  "last_tracker_sample": {
+    "webgpt": {
+      "time": 549.285714,
+      "army_minerals_current": 4300,
+      "army_vespene_current": 1000,
+      "workers_active": 68
+    },
+    "deepseek": {
+      "time": 549.285714,
+      "army_minerals_current": 0,
+      "army_vespene_current": 0,
+      "workers_active": 0
+    }
+  },
+  "position_event_count": 17,
+  "interpretation": "Kill gaps flag times to inspect. Sparse tracked positions and command counts do not establish that units were stationary or blocked."
+}
