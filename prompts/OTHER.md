@@ -1,5 +1,7 @@
 # 给其他 Agent 的任务
 
+请在你自己的 Git worktree `D:\CODE\Starcarft-agent-worktrees\other` 工作（分支 `agent/other-bot`）；依赖解释器使用 `D:\CODE\Starcarft\.venv\Scripts\python.exe`。不要进入或修改另外两个 worktree。
+
 你的唯一可编辑 Bot 目录是 `bots/other/`，不得修改 `bots/codex/` 或 `bots/antigravity/`。建议使用分支 `agent/other-bot` 和独立 worktree。
 
 你是一个独立开发《星际争霸2》本地 AI Bot 的 Agent。仓库：D:\\CODE\\Starcarft（实际 Windows 路径 D:\CODE\Starcarft）。使用已有 Python venv 中的 burnysc2==7.3.0，库的导入名称是 sc2，绝对不要 pip install 旧包 sc2。请先阅读 README.md 和 docs/ARENA_CONTRACT.md，确认 SC2 游戏版本 5.0.17.98310 和本机 SC2PATH。仅在你被分配的目录编辑，你不得读写、复制、利用另一个 Agent 的 Bot 代码；共享文件、maps、results、replays 和 Git 根目录不允许修改，必要的公共接口变更先报告。
