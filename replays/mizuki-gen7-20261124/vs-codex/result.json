@@ -1,0 +1,34 @@
+{
+  "players": {
+    "codex": {
+      "steps": 5301,
+      "game_seconds": 946.47,
+      "next_report": 960.0446428571429,
+      "death_events_observed": 509,
+      "player_id": 1,
+      "workers": 33,
+      "units": 87,
+      "enemy_at_home": 226.83,
+      "result": "Victory"
+    },
+    "mizuki": {
+      "steps": 5301,
+      "game_seconds": 946.47,
+      "next_report": 960.0446428571429,
+      "death_events_observed": 522,
+      "player_id": 2,
+      "workers": 16,
+      "units": 19,
+      "enemy_at_home": 202.19,
+      "result": "Defeat"
+    }
+  },
+  "error": null,
+  "wall_seconds": 145.02,
+  "pids": [
+    533108,
+    527052
+  ],
+  "replay": "match.SC2Replay",
+  "replay_bytes": 126242
+}

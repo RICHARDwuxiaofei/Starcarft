@@ -1,0 +1,34 @@
+{
+  "players": {
+    "webgpt": {
+      "steps": 3704,
+      "game_seconds": 661.29,
+      "next_report": 720.0446428571429,
+      "death_events_observed": 710,
+      "player_id": 1,
+      "workers": 70,
+      "units": 167,
+      "enemy_at_home": 198.62,
+      "result": "Victory"
+    },
+    "mizuki": {
+      "steps": 3704,
+      "game_seconds": 661.29,
+      "next_report": 720.0446428571429,
+      "death_events_observed": 700,
+      "player_id": 2,
+      "workers": 22,
+      "units": 24,
+      "enemy_at_home": 146.47,
+      "result": "Defeat"
+    }
+  },
+  "error": null,
+  "wall_seconds": 103.44,
+  "pids": [
+    380812,
+    415964
+  ],
+  "replay": "match.SC2Replay",
+  "replay_bytes": 110407
+}
