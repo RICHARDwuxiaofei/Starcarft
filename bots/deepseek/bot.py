@@ -71,6 +71,23 @@ ARMY_TYPES: frozenset[UnitTypeId] = frozenset(
     }
 )
 
+# 生产建筑 -> (科技实验室, 反应堆)。附件挂在建筑侧面，必须确认位置可用再下单。
+ADDON_TYPES: dict[UnitTypeId, tuple[UnitTypeId, UnitTypeId]] = {
+    UnitTypeId.BARRACKS: (UnitTypeId.BARRACKSTECHLAB, UnitTypeId.BARRACKSREACTOR),
+    UnitTypeId.FACTORY: (UnitTypeId.FACTORYTECHLAB, UnitTypeId.FACTORYREACTOR),
+    UnitTypeId.STARPORT: (UnitTypeId.STARPORTTECHLAB, UnitTypeId.STARPORTREACTOR),
+}
+
+# 附件建造技能的内置兜底表；正常运行优先用 game_data 里的 creation_ability。
+ADDON_CREATION_ABILITY: dict[UnitTypeId, AbilityId] = {
+    UnitTypeId.BARRACKSTECHLAB: AbilityId.BUILD_TECHLAB_BARRACKS,
+    UnitTypeId.BARRACKSREACTOR: AbilityId.BUILD_REACTOR_BARRACKS,
+    UnitTypeId.FACTORYTECHLAB: AbilityId.BUILD_TECHLAB_FACTORY,
+    UnitTypeId.FACTORYREACTOR: AbilityId.BUILD_REACTOR_FACTORY,
+    UnitTypeId.STARPORTTECHLAB: AbilityId.BUILD_TECHLAB_STARPORT,
+    UnitTypeId.STARPORTREACTOR: AbilityId.BUILD_REACTOR_STARPORT,
+}
+
 
 # ---------------------------------------------------------------------------
 # 纯决策函数：不依赖游戏客户端，便于离线单元测试与场景回归。
@@ -226,6 +243,18 @@ def needs_turret(enemy_air_units: int, turrets: int, bases: int) -> bool:
     return enemy_air_units >= 3 and turrets < max(1, bases)
 
 
+def order_key(ability, target, queue: bool = False) -> tuple:
+    """把一条指令压缩成可比较的键，用于本帧/短时间内的重复指令去重。"""
+    ability_value = getattr(ability, "value", ability)
+    if isinstance(target, Point2):
+        target_key = (round(target.x, 1), round(target.y, 1))
+    elif target is None:
+        target_key = None
+    else:
+        target_key = getattr(target, "tag", target)
+    return (ability_value, target_key, queue)
+
+
 class CompetitiveBot(BotAI):
     """人族生化运营推进 Bot。
 
@@ -253,6 +282,22 @@ class CompetitiveBot(BotAI):
         self._last_bunker_try: float = -999.0
         self._last_structure_build: float = -999.0
         self._last_refinery_build: float = -999.0
+        self._last_addon_attempt: float = -999.0
+        self._last_open_build_try: float = -999.0
+        self._last_supply_build: float = -999.0
+        self._last_turret_build: float = -999.0
+        # 附件位被占的建筑在冷却期内不再下单，避免每帧重复提交放置请求。
+        self._addon_blocked_until: dict[int, float] = {}
+        # 已下单的附件：building tag -> (附件类型, 下单时间)，用于避免重复挂同种附件。
+        self._addon_orders: dict[int, tuple[UnitTypeId, float]] = {}
+        # 短时间内的指令去重表：unit tag -> (指令键, 时间)。
+        self._order_memo: dict[int, tuple[tuple, float]] = {}
+        # 指令计数，用于发现“每帧刷指令”这类会拖垮客户端的行为。
+        self._commands_total: int = 0
+        self._commands_this_step: int = 0
+        self._commands_peak: int = 0
+        self._duplicates_skipped: int = 0
+        self._steps_seen: int = 0
         self._scout_tag: int | None = None
         self._scout_sent: bool = False
         self._natural: Point2 | None = None
@@ -276,7 +321,12 @@ class CompetitiveBot(BotAI):
         self._open_cc: bool = False
 
     async def on_start(self) -> None:
-        self.client.game_step = 2
+        # 不覆盖对局脚本设置的推进步长：同一局两个客户端要用同一节奏推帧。
+        # 旧版这里写死 game_step=2，而 burnysc2 的 Client 默认是 4，结果本机被推成
+        # 对手两倍的帧数（诊断日志里同一局 1183 步 vs 592 步），请求量翻倍。
+        step = getattr(self.client, "game_step", 4)
+        if step != 4:
+            logger.warning("[DeepSeek] 推进步长=%s（默认为 4），按对局脚本执行", step)
         self._expansions = sorted(
             self.expansion_locations_list,
             key=lambda pos: pos.distance_to(self.start_location),
@@ -293,6 +343,8 @@ class CompetitiveBot(BotAI):
         )
 
     async def on_step(self, iteration: int) -> None:
+        self._commands_this_step = 0
+        self._steps_seen += 1
         if not self.townhalls:
             # 基地全失：已无法运营，交由对局脚本判定胜负。
             return
@@ -305,7 +357,7 @@ class CompetitiveBot(BotAI):
         # 二人口完成后即便还在等 400 矿开分矿，也要允许补人口。
         if not opening or self._open_depot2:
             await self._manage_supply()
-        self._manage_addons()
+        await self._manage_addons()
         if not opening:
             await self._manage_structures()
         self._manage_tech()
@@ -318,6 +370,52 @@ class CompetitiveBot(BotAI):
         self._manage_army()
         self._log_status()
 
+    def train(self, unit_type: UnitTypeId, amount: int = 1) -> bool:
+        """统计出兵指令，让日志里的“指令/帧”反映真实提交量。"""
+        result = super().train(unit_type, amount)
+        if result:
+            issued = max(1, int(amount))
+            self._commands_total += issued
+            self._commands_this_step += issued
+            self._commands_peak = max(self._commands_peak, self._commands_this_step)
+        return result
+
+    # ---- 指令下发 ---------------------------------------------------------
+
+    def _issue(self, unit, command, min_interval: float = 0.6) -> bool:
+        """下发一条指令，并抑制同一单位在短时间内的重复指令。
+
+        每帧对同一单位重复提交同一条指令（尤其是建筑/附件放置）会让客户端的
+        指令队列持续堆积，是本次排查的重点怀疑对象。这里统一做去重与计数，
+        战术判断仍然由各 manager 决定。
+        """
+        if command is None or isinstance(command, bool):
+            return False
+        ability = getattr(command, "ability", None)
+        key = order_key(
+            ability, getattr(command, "target", None), getattr(command, "queue", False)
+        )
+        tag = getattr(unit, "tag", None)
+        if tag is not None:
+            previous = self._order_memo.get(tag)
+            if (
+                previous is not None
+                and previous[0] == key
+                and self.time - previous[1] < min_interval
+            ):
+                self._duplicates_skipped += 1
+                return False
+            if len(self._order_memo) > 512:
+                self._order_memo.clear()
+        if not self.do(command):
+            return False
+        if tag is not None:
+            self._order_memo[tag] = (key, self.time)
+        self._commands_this_step += 1
+        self._commands_total += 1
+        self._commands_peak = max(self._commands_peak, self._commands_this_step)
+        return True
+
     # ---- 开局建造序列 -----------------------------------------------------
 
     async def _manage_opening(self) -> bool:
@@ -328,6 +426,9 @@ class CompetitiveBot(BotAI):
         """
         if self._opening_done:
             return False
+        # 放置失败时每秒最多重试一次，避免每帧发起一次放置查询。
+        if self.time - self._last_open_build_try < 1.0:
+            return True
 
         anchor = self._main_base().position
         # 开局补给站被拆会导致人口卡死，发现后重新走一次补给站步骤。
@@ -342,6 +443,7 @@ class CompetitiveBot(BotAI):
         if not self._open_depot1:
             if self.supply_used < 13 or self.minerals < 100:
                 return True
+            self._last_open_build_try = self.time
             if await self.build(
                 UnitTypeId.SUPPLYDEPOT,
                 near=anchor,
@@ -355,6 +457,7 @@ class CompetitiveBot(BotAI):
         if not self._open_rax:
             if self.supply_used < 15 or self.minerals < 150:
                 return True
+            self._last_open_build_try = self.time
             if await self.build(
                 UnitTypeId.BARRACKS,
                 near=anchor,
@@ -368,6 +471,8 @@ class CompetitiveBot(BotAI):
         if not self._open_gas:
             if self.minerals >= 75:
                 geyser = self._available_geyser()
+                if geyser is not None:
+                    self._last_open_build_try = self.time
                 if geyser is not None and await self.build(
                     UnitTypeId.REFINERY, near=geyser
                 ):
@@ -378,6 +483,7 @@ class CompetitiveBot(BotAI):
         if not self._open_depot2:
             if self.supply_used < 20 and self.time < 180:
                 return True
+            self._last_open_build_try = self.time
             if await self.build(
                 UnitTypeId.SUPPLYDEPOT,
                 near=anchor,
@@ -557,7 +663,7 @@ class CompetitiveBot(BotAI):
             base = self.townhalls.closest_to(worker)
             field = self._best_mineral_field(worker, prefer_near=base.position)
             if field is not None:
-                self.do(worker.gather(field))
+                self._issue(worker, worker.gather(field), min_interval=2.0)
 
     def _transfer_surplus_workers(self) -> None:
         """把主矿多余农民调往未饱和的分矿，避免一边拥挤一边缺人。"""
@@ -580,7 +686,7 @@ class CompetitiveBot(BotAI):
         )
         if candidates:
             worker = candidates.closest_to(target_base)
-            self.do(worker.gather(field))
+            self._issue(worker, worker.gather(field), min_interval=2.0)
 
     def _fill_refineries(self) -> None:
         """每座气矿保持 3 名农民。"""
@@ -601,7 +707,7 @@ class CompetitiveBot(BotAI):
                     best_distance = distance
             if best_worker is None:
                 continue
-            self.do(best_worker.gather(refinery))
+            self._issue(best_worker, best_worker.gather(refinery), min_interval=2.0)
             return
 
     def _available_geyser(self):
@@ -633,13 +739,17 @@ class CompetitiveBot(BotAI):
             # 一次最多两座，减少“人口墙”。
             and pending < 2
             and self.minerals >= 100
+            and self.time - self._last_supply_build > 1.0
         ):
-            await self.build(
+            self._last_supply_build = self.time
+            built = await self.build(
                 UnitTypeId.SUPPLYDEPOT,
                 near=self._main_base().position,
                 max_distance=12,
                 random_alternative=False,
             )
+            if built is None:
+                logger.info("[DeepSeek] 补给站放置失败，稍后重试")
 
     # ---- 指挥中心 / 矿骡 / 扫描 ------------------------------------------
 
@@ -648,7 +758,7 @@ class CompetitiveBot(BotAI):
         for cc in self.townhalls(UnitTypeId.COMMANDCENTER).ready:
             if self.time < 240 or self.minerals < 150:
                 continue
-            self.do(cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND))
+            self._issue(cc, cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND), 2.0)
             logger.info("[DeepSeek] 升级轨道指挥中心")
             return
 
@@ -664,7 +774,11 @@ class CompetitiveBot(BotAI):
             if self._scan_due() and orbital.energy < 100:
                 continue
             field = self.mineral_field.closest_to(orbital)
-            self.do(orbital(AbilityId.CALLDOWNMULE_CALLDOWNMULE, field))
+            self._issue(
+                orbital,
+                orbital(AbilityId.CALLDOWNMULE_CALLDOWNMULE, field),
+                min_interval=3.0,
+            )
             self._last_mule = self.time
 
     # ---- 生产建筑与附件 ---------------------------------------------------
@@ -717,49 +831,125 @@ class CompetitiveBot(BotAI):
             if not self.can_afford(unit_type):
                 continue
             anchor = self._main_base().position
-            await self.build(
+            built = await self.build(
                 unit_type,
                 near=anchor,
                 max_distance=14,
                 random_alternative=False,
             )
             self._last_structure_build = self.time
+            if built is None:
+                logger.info("[DeepSeek] %s 放置失败，附近没有空位", unit_type.name)
             return
 
-    def _manage_addons(self) -> None:
+    def _creation_ability(self, unit_type: UnitTypeId) -> AbilityId | None:
+        """取建筑的真实建造技能：优先 game_data，取不到时退回内置表。"""
+        try:
+            creation = self.game_data.units[unit_type.value].creation_ability
+        except (AttributeError, KeyError, IndexError):
+            creation = None
+        if creation is not None:
+            return creation.id
+        return ADDON_CREATION_ABILITY.get(unit_type)
+
+    async def _try_addon(self, building, addon: UnitTypeId) -> bool:
+        """尝试给一栋生产建筑挂附件；返回 True 表示本帧已处理过附件。"""
+        if building.add_on_tag != 0 or not building.is_idle:
+            return False
+        if self._addon_blocked_until.get(building.tag, 0) > self.time:
+            return False
+        ordered = self._addon_orders.get(building.tag)
+        if ordered is not None and self.time - ordered[1] < 30:
+            # 这栋建筑已经下过附件单，别在附件没出现前重复提交。
+            return False
+        if not self.can_afford(addon):
+            return False
+        ability = self._creation_ability(addon)
+        if ability is None:
+            return False
+        # 附件只能贴在建筑侧面：位置被占时客户端会把放置请求挂住，
+        # 必须先确认那一格空着（2x2，用补给站探位即可）。
+        self._last_addon_attempt = self.time
+        slot = building.position.offset((2.5, -0.5))
+        if not await self.can_place_single(UnitTypeId.SUPPLYDEPOT, slot):
+            self._addon_blocked_until[building.tag] = self.time + 10
+            logger.info(
+                "[DeepSeek] 附件位被占，暂缓挂载 %s tag=%s 位置=%s",
+                addon.name,
+                building.tag,
+                slot,
+            )
+            return True
+        command = building.build(addon)
+        if isinstance(command, bool) or command is None:
+            return False
+        if not self._issue(building, command, min_interval=3.0):
+            return False
+        self._addon_orders[building.tag] = (addon, self.time)
+        logger.info(
+            "[DeepSeek] 挂载附件 %s -> %s tag=%s 技能=%s",
+            addon.name,
+            building.type_id.name,
+            building.tag,
+            ability.name,
+        )
+        return True
+
+    def _addon_planned(self, addon: UnitTypeId) -> bool:
+        """该种附件是否已在建造或刚下过单（30 秒内生效）。"""
+        for tag, (planned, ordered_at) in list(self._addon_orders.items()):
+            if self.time - ordered_at > 30:
+                del self._addon_orders[tag]
+                continue
+            if planned == addon:
+                return True
+        return False
+
+    async def _manage_addons(self) -> None:
         """兵营/工厂/星港挂附件：科技实验室出掠夺者/坦克，反应堆爆生化。"""
         if not self.townhalls:
             return
+        # 每 1 秒最多处理一次附件，避免每帧重复提交放置指令。
+        if self.time - self._last_addon_attempt < 1.0:
+            return
 
         # 工厂与星港：工厂科技实验室（坦克），星港反应堆（双倍医疗运输机）。
-        for factory in self.structures(UnitTypeId.FACTORY).ready.filter(
-            lambda f: f.add_on_tag == 0 and f.is_idle
+        for factory in sorted(
+            self.structures(UnitTypeId.FACTORY).ready, key=lambda f: f.tag
         ):
-            if self.minerals >= 50 and self.vespene >= 25:
-                self.do(factory(AbilityId.BUILD_TECHLAB_FACTORY))
+            if await self._try_addon(factory, UnitTypeId.FACTORYTECHLAB):
                 return
 
-        for starport in self.structures(UnitTypeId.STARPORT).ready.filter(
-            lambda s: s.add_on_tag == 0 and s.is_idle
+        for starport in sorted(
+            self.structures(UnitTypeId.STARPORT).ready, key=lambda s: s.tag
         ):
-            if self.minerals >= 50:
-                self.do(starport(AbilityId.BUILD_REACTOR_STARPORT))
+            if await self._try_addon(starport, UnitTypeId.STARPORTREACTOR):
                 return
 
         # 兵营：至少保留一个科技实验室（兴奋剂/掠夺者），其余反应堆。
-        barracks = sorted(
-            self.structures(UnitTypeId.BARRACKS).ready.filter(
-                lambda b: b.add_on_tag == 0 and b.is_idle
-            ),
-            key=lambda b: b.tag,
-        )
-        if not barracks:
+        techlab, reactor = ADDON_TYPES[UnitTypeId.BARRACKS]
+        bare = [
+            rax
+            for rax in sorted(
+                self.structures(UnitTypeId.BARRACKS).ready, key=lambda b: b.tag
+            )
+            if rax.add_on_tag == 0
+        ]
+        if not bare:
             return
-        if not self.techlab_tags and self.vespene >= 25 and self.minerals >= 50:
-            self.do(barracks[0](AbilityId.BUILD_TECHLAB_BARRACKS))
+        # 科技实验室在建/已下单时也算已安排，避免给多个兵营都挂科技实验室。
+        if (
+            not self.techlab_tags
+            and not self.structures(UnitTypeId.BARRACKSTECHLAB)
+            and not self._addon_planned(UnitTypeId.BARRACKSTECHLAB)
+        ):
+            for rax in bare:
+                if await self._try_addon(rax, techlab):
+                    return
             return
-        if self.minerals >= 50:
-            self.do(barracks[0](AbilityId.BUILD_REACTOR_BARRACKS))
+        for rax in bare:
+            if await self._try_addon(rax, reactor):
+                return
 
     # ---- 科技 -------------------------------------------------------------
 
@@ -922,7 +1112,7 @@ class CompetitiveBot(BotAI):
             worker = self.workers.closest_to(self.start_location)
             if worker is not None and worker.tag != self._scout_tag:
                 target = self.enemy_start_locations[0]
-                self.do(worker.move(target))
+                self._issue(worker, worker.move(target), 5.0)
                 self._scout_tag = worker.tag
                 self._scout_sent = True
                 logger.info("[DeepSeek] 派出农民侦察 %s", target)
@@ -934,7 +1124,7 @@ class CompetitiveBot(BotAI):
             if orbital.energy < 50:
                 continue
             scan_target = self._enemy_natural() or self.enemy_start_locations[0]
-            self.do(orbital(AbilityId.SCANNERSWEEP_SCAN, scan_target))
+            self._issue(orbital, orbital(AbilityId.SCANNERSWEEP_SCAN, scan_target), 5.0)
             self._last_scan = self.time
             logger.info("[DeepSeek] 扫描敌方分矿 %s", scan_target)
             return
@@ -996,7 +1186,7 @@ class CompetitiveBot(BotAI):
             for worker in self.workers.filter(
                 lambda w: any(w.distance_to(e) < 8 for e in enemy_near)
             ):
-                self.do(worker.move(self._main_base().position))
+                self._issue(worker, worker.move(self._main_base().position), 2.0)
 
         # 地堡：自然矿防守支点，敌方压制时最多一座。
         if (
@@ -1022,7 +1212,11 @@ class CompetitiveBot(BotAI):
                 continue
             marines = self.units(UnitTypeId.MARINE)
             if marines:
-                self.do(bunker(AbilityId.LOAD_BUNKER, marines.closest_to(bunker)))
+                self._issue(
+                    bunker,
+                    bunker(AbilityId.LOAD_BUNKER, marines.closest_to(bunker)),
+                    1.0,
+                )
 
         # 极端情况：兵力不足且敌人已进主矿，拉 10 个农民协防。
         if (
@@ -1033,7 +1227,7 @@ class CompetitiveBot(BotAI):
         ):
             scvs = self.workers.sorted_by_distance_to(self._threat_position)[:10]
             for scv in scvs:
-                self.do(scv.attack(self._threat_position))
+                self._issue(scv, scv.attack(self._threat_position), 2.0)
 
     async def _manage_air_defense(self) -> None:
         """看到成规模空军后，在每个基地附近补一座导弹塔。"""
@@ -1045,9 +1239,12 @@ class CompetitiveBot(BotAI):
             return
         if self.minerals < 125 or self.already_pending(UnitTypeId.MISSILETURRET) > 0:
             return
+        if self.time - self._last_turret_build < 2.0:
+            return
         for base in self.townhalls.ready:
             if any(turret.distance_to(base) < 12 for turret in turrets):
                 continue
+            self._last_turret_build = self.time
             await self.build(
                 UnitTypeId.MISSILETURRET,
                 near=base.position,
@@ -1140,7 +1337,7 @@ class CompetitiveBot(BotAI):
         point = self._home_point()
         for unit in army.idle:
             if unit.distance_to(point) > 6:
-                self.do(unit.move(point))
+                self._issue(unit, unit.move(point), 1.0)
 
     def _defend(self, army, point: Point2) -> None:
         now = self.time
@@ -1159,9 +1356,9 @@ class CompetitiveBot(BotAI):
             if target is not None:
                 if unit.type_id == UnitTypeId.SIEGETANKSIEGED:
                     continue
-                self.do(unit.attack(target))
+                self._issue(unit, unit.attack(target), 1.0)
             elif unit.distance_to(point) > 8:
-                self.do(unit.move(point))
+                self._issue(unit, unit.move(point), 1.0)
 
     def _retreat(self, army) -> None:
         point = self._home_point()
@@ -1170,7 +1367,7 @@ class CompetitiveBot(BotAI):
         self._last_army_order = self.time
         for unit in army:
             if unit.distance_to(point) > 6:
-                self.do(unit.move(point))
+                self._issue(unit, unit.move(point), 1.0)
 
     def _push(self, army, target: Point2) -> None:
         if self.time - self._last_army_order < 0.5:
@@ -1187,13 +1384,13 @@ class CompetitiveBot(BotAI):
                 if unit.type_id == UnitTypeId.SIEGETANKSIEGED:
                     # 架起的坦克交给自动攻击，不打断炮击。
                     continue
-                self.do(unit.attack(focus))
+                self._issue(unit, unit.attack(focus), 1.0)
             self._maybe_stim(army)
         else:
             for unit in army:
                 if unit.type_id == UnitTypeId.SIEGETANKSIEGED:
                     continue
-                self.do(unit.move(target))
+                self._issue(unit, unit.move(target), 1.0)
 
     def _prune_cleared_target(self, army, target: Point2) -> None:
         """部队已站到目标点且视野内没有建筑时，移除失效的建筑记忆。
@@ -1227,9 +1424,9 @@ class CompetitiveBot(BotAI):
             if unit.has_buff(BuffId.STIMPACK):
                 continue
             if unit.type_id == UnitTypeId.MARINE:
-                self.do(unit(AbilityId.EFFECT_STIM_MARINE))
+                self._issue(unit, unit(AbilityId.EFFECT_STIM_MARINE), 5.0)
             else:
-                self.do(unit(AbilityId.EFFECT_STIM_MARAUDER))
+                self._issue(unit, unit(AbilityId.EFFECT_STIM_MARAUDER), 5.0)
 
     def _manage_medivacs(self, medivacs, point: Point2) -> None:
         """运输机跟随部队，靠自身治疗维持生化部队续航。"""
@@ -1237,7 +1434,7 @@ class CompetitiveBot(BotAI):
             return
         for medivac in medivacs:
             if medivac.distance_to(point) > 10:
-                self.do(medivac.move(point))
+                self._issue(medivac, medivac.move(point), 1.5)
 
     def _manage_tanks(self, army, point: Point2, defending: bool) -> None:
         """坦克阵地逻辑：防守/接敌架起，长距离移动时收起。"""
@@ -1246,10 +1443,10 @@ class CompetitiveBot(BotAI):
         enemy_near = self.enemy_units.filter(lambda u: u.distance_to(point) < 22)
         for tank in unsieged:
             if (defending or enemy_near) and tank.distance_to(point) < 18:
-                self.do(tank(AbilityId.SIEGEMODE_SIEGEMODE))
+                self._issue(tank, tank(AbilityId.SIEGEMODE_SIEGEMODE), 3.0)
         for tank in sieged:
             if not defending and not enemy_near and tank.distance_to(point) > 28:
-                self.do(tank(AbilityId.UNSIEGE_UNSIEGE))
+                self._issue(tank, tank(AbilityId.UNSIEGE_UNSIEGE), 3.0)
 
     def _attack_target(self) -> Point2:
         """优先打最近见过的敌方基地，其次任意建筑，最后打出生点。"""
@@ -1277,9 +1474,11 @@ class CompetitiveBot(BotAI):
         if self.time - self._last_log < 30:
             return
         self._last_log = self.time
+        self._order_memo.clear()
+        steps = max(1, self._steps_seen)
         logger.info(
             "[DeepSeek] %s 农民=%d 基地=%d 人口=%.0f/%.0f 矿=%d 气=%d "
-            "部队=%.1f 敌兵=%.1f 状态=%s",
+            "部队=%.1f 敌兵=%.1f 状态=%s 指令=%.2f/帧(峰值%d, 去重%d) 步长=%s",
             self.time_formatted,
             self.workers.amount,
             len(self.townhalls),
@@ -1290,6 +1489,10 @@ class CompetitiveBot(BotAI):
             self._army_supply(),
             self._enemy_army_supply,
             self.attack_state,
+            self._commands_total / steps,
+            self._commands_peak,
+            self._duplicates_skipped,
+            getattr(self.client, "game_step", "?"),
         )
 
 

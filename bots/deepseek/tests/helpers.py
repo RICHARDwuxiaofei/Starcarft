@@ -93,6 +93,9 @@ class FakeUnit:
     def attack(self, target):
         return FakeCommand("attack", self, target)
 
+    def build(self, unit_type, position=None):
+        return FakeCommand("build", self, position, unit_type)
+
     def has_buff(self, _buff) -> bool:
         return False
 
@@ -176,6 +179,8 @@ class FakeBotWorld:
         self.enemy_structures = FakeUnits([])
         self.mineral_fields = FakeUnits([])
         self.geysers = FakeUnits([])
+        self.blocked_slots: set[tuple[float, float]] = set()
+        self.placement_queries: list[tuple[object, tuple[float, float]]] = []
         self._configure()
         self.time_seconds = 0.0
 
@@ -184,7 +189,7 @@ class FakeBotWorld:
     def _configure(self) -> None:
         bot = self.bot
         bot.state = SimpleNamespace(game_loop=0, upgrades=set())
-        bot.client = SimpleNamespace(game_step=2)
+        bot.client = SimpleNamespace(game_step=4)
         bot.race = Race.Terran
         bot.enemy_race = Race.Zerg
         bot.game_info = SimpleNamespace(
@@ -224,6 +229,7 @@ class FakeBotWorld:
         bot.do = self._do
         bot.build = self._build
         bot.expand_now = self._expand_now
+        bot.can_place_single = self._can_place_single
 
     @property
     def time_seconds(self) -> float:
@@ -289,6 +295,11 @@ class FakeBotWorld:
 
     async def _expand_now(self, location=None, **kwargs):
         self.expansions.append(location)
+
+    async def _can_place_single(self, building, position):
+        key = (round(position.x, 1), round(position.y, 1))
+        self.placement_queries.append((building, key))
+        return key not in self.blocked_slots
 
     # ---- 场景辅助 -------------------------------------------------------
 

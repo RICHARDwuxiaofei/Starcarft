@@ -29,10 +29,11 @@ def test_opening_builds_depot_then_barracks_then_gas():
     assert world.builds and world.builds[0][0] == UnitTypeId.SUPPLYDEPOT
     assert world.bot._open_depot1 is True
 
-    # 补给站刚开工时不会重复拍第二座，也不会跳过兵营直接开矿。
+    # 1 秒内的重复调用不会重复下单（放置限速），也不会跳过兵营直接开矿。
     world.run(world.bot._manage_opening())
     assert [b[0] for b in world.builds] == [UnitTypeId.SUPPLYDEPOT]
 
+    world.time_seconds += 1.5
     world.bot.supply_used = 15
     world.bot.minerals = 200
     world.run(world.bot._manage_opening())
@@ -392,3 +393,138 @@ def test_early_on_step_starts_opening_without_client():
 
     assert [b[0] for b in world.builds] == [UnitTypeId.SUPPLYDEPOT]
     assert world.bot._open_depot1 is True
+
+
+# ---------------------------------------------------------------------------
+# 掉线排查相关：推进步长、附件放置、重复指令
+# ---------------------------------------------------------------------------
+
+
+def test_on_start_keeps_client_step_and_sets_natural():
+    world = FakeBotWorld(module)
+    world.run(world.bot.on_start())
+
+    # 不能私自改推进步长：同局两个客户端必须同节奏推帧。
+    assert world.bot.client.game_step == 4
+    assert world.bot._natural == Point2((62, 50))
+
+
+def test_addon_is_issued_once_then_throttled():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    rax = world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=101, is_idle=True)
+
+    world.run(world.bot._manage_addons())
+
+    builds = [c for c in world.commands if c.kind == "build"]
+    assert len(builds) == 1
+    assert builds[0].unit is rax
+    assert builds[0].ability == UnitTypeId.BARRACKSTECHLAB
+
+    # 同一帧/紧邻帧不会重复提交放置请求。
+    world.run(world.bot._manage_addons())
+    assert len([c for c in world.commands if c.kind == "build"]) == 1
+
+
+def test_addon_skipped_when_slot_blocked():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    rax = world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=102, is_idle=True)
+    slot = rax.position.offset((2.5, -0.5))
+    world.blocked_slots.add((round(slot.x, 1), round(slot.y, 1)))
+
+    world.run(world.bot._manage_addons())
+
+    assert [c for c in world.commands if c.kind == "build"] == []
+    assert world.bot._addon_blocked_until[rax.tag] > 150
+
+
+def test_addon_waits_when_barracks_is_busy():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=103, is_idle=False)
+
+    world.run(world.bot._manage_addons())
+
+    assert [c for c in world.commands if c.kind == "build"] == []
+
+
+def test_issue_skips_identical_command_within_interval():
+    world = FakeBotWorld(module)
+    world.time_seconds = 100
+    worker = world.bot.workers[0]
+    world.add_mineral_field((52, 50))
+    field = world.mineral_fields[0]
+
+    assert world.bot._issue(worker, worker.gather(field), min_interval=2.0) is True
+    assert world.bot._issue(worker, worker.gather(field), min_interval=2.0) is False
+    assert world.bot._duplicates_skipped == 1
+
+    world.time_seconds = 103
+    assert world.bot._issue(worker, worker.gather(field), min_interval=2.0) is True
+
+
+def test_same_barracks_is_not_given_two_addons():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=111, is_idle=True)
+
+    world.run(world.bot._manage_addons())
+    world.time_seconds = 153
+    world.run(world.bot._manage_addons())
+
+    builds = [c for c in world.commands if c.kind == "build"]
+    assert [c.ability for c in builds] == [UnitTypeId.BARRACKSTECHLAB]
+
+
+def test_second_barracks_gets_reactor_after_techlab_is_ordered():
+    world = FakeBotWorld(module)
+    world.time_seconds = 150
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=121, is_idle=True)
+    world.add_structure(UnitTypeId.BARRACKS, (48, 44), tag=122, is_idle=True)
+
+    world.run(world.bot._manage_addons())
+    world.time_seconds = 152
+    world.run(world.bot._manage_addons())
+
+    abilities = [c.ability for c in world.commands if c.kind == "build"]
+    assert abilities == [UnitTypeId.BARRACKSTECHLAB, UnitTypeId.BARRACKSREACTOR]
+
+
+def test_barracks_gets_reactor_once_techlab_exists():
+    world = FakeBotWorld(module)
+    world.time_seconds = 400
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.techlab_tags = {9000}
+    world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=113, is_idle=True)
+
+    world.run(world.bot._manage_addons())
+
+    builds = [c for c in world.commands if c.kind == "build"]
+    assert [c.ability for c in builds] == [UnitTypeId.BARRACKSREACTOR]
+
+
+def test_long_run_keeps_command_rate_bounded_and_stable():
+    """连续推进 80 帧：不抛异常，且每帧指令量不失控。"""
+    world = _build_midgame_world()
+    for step in range(80):
+        world.time_seconds = 420 + step * 4
+        world.bot.minerals = 600 + step * 5
+        world.bot.vespene = 250
+        world.run(world.bot.on_step(step))
+
+    assert world.bot._commands_peak <= 80, f"每帧指令过多: {world.bot._commands_peak}"
+    average = world.bot._commands_total / max(1, world.bot._steps_seen)
+    assert average <= 60, f"平均每帧指令过多: {average:.1f}"
+    assert world.bot._duplicates_skipped >= 0
