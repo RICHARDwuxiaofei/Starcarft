@@ -76,6 +76,11 @@ class _CombatState:
     ground_sweep: _Sweep = field(default_factory=_Sweep)
     air_sweep: _Sweep = field(default_factory=_Sweep)
     core_anchor: Point2 | None = None
+    natural_tag: int | None = None
+    natural_post: Point2 | None = None
+    reserve_tank: int | None = None
+    reserve_bio: tuple[int, ...] = ()
+    outer_contest_until: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -570,6 +575,159 @@ def _guard_line(
         _send(state, now, unit, "move", offset)
     elif not unit.is_idle:
         # Cancel an old target order; no out-of-range chase from the defensive line.
+        _send(state, now, unit, AbilityId.HOLDPOSITION_HOLD)
+
+
+def _natural_reserve(
+    bot: BotAI,
+    state: _CombatState,
+    now: float,
+    phase: _Phase,
+    ground: list[Unit],
+    enemies: list[Unit],
+    defense: tuple[Point2, list[Unit]] | None,
+    siege_guard: _SiegeGuard | None,
+) -> tuple[Point2, set[int]] | None:
+    """Post one tank at the natural without making the entire army a garrison."""
+    halls = sorted(
+        (h for h in bot.townhalls if not h.is_flying),
+        key=lambda h: (h.distance_to(bot.start_location), h.tag),
+    )
+    tanks = [u for u in ground if u.type_id in _TANKS]
+    if (
+        not tanks
+        or len(halls) < 2
+        or halls[0].distance_to(bot.start_location) > 9
+        or not halls[1].is_ready
+    ):
+        state.reserve_tank, state.reserve_bio = None, ()
+        return None
+    natural = halls[1]
+    if natural.tag != state.natural_tag:
+        state.natural_tag = natural.tag
+        state.reserve_tank, state.reserve_bio = None, ()
+        state.outer_contest_until = 0.0
+        center = bot.game_info.map_center
+        if natural.distance_to(center) < 1:
+            center = natural.position.offset(natural.position - bot.start_location)
+        axis = natural.distance_to(center) or 1.0
+        dx = (center.x - natural.position.x) / axis
+        dy = (center.y - natural.position.y) / axis
+        candidates = [
+            natural.position.offset((dx * depth - dy * lane, dy * depth + dx * lane))
+            for depth, lane in ((6, 0), (5, 3), (5, -3), (4, 5), (4, -5), (4, 0))
+        ]
+        state.natural_post = next(
+            (p for p in candidates if _inside(bot, p) and bot.in_pathing_grid(p)),
+            None,
+        )
+    post = state.natural_post
+    if post is None or phase is _Phase.RETREAT:
+        return None
+    if defense and defense[0] in (halls[0].position, natural.position):
+        # An actual incursion supersedes a peacetime sentry post.
+        return None
+    outer = halls[2:]
+    ground_threats = [
+        e
+        for e in enemies
+        if not e.is_flying
+        and (e.can_attack_ground or e.type_id in _STATIC | _HIGH_VALUE)
+    ]
+    threatened_outer = [
+        (h, [e for e in ground_threats if e.distance_to(h) <= 21]) for h in outer
+    ]
+    threatened_outer = [(h, threats) for h, threats in threatened_outer if threats]
+    if threatened_outer:
+        state.outer_contest_until = now + 9.0
+        if siege_guard is None and all(
+            _strength([u for u in ground if u.distance_to(h) <= 13])
+            >= max(7.0, 1.45 * _strength(threats))
+            for h, threats in threatened_outer
+        ):
+            # Don't hold armor back from a real, already concentrated counterattack.
+            state.outer_contest_until = now
+            return None
+    contested = now < state.outer_contest_until
+    preparing = any(not h.is_ready for h in outer)
+    if not contested and phase is not _Phase.GATHER and not preparing:
+        return None
+    if siege_guard and _inside_siege(post, siege_guard.guns, 2):
+        return None
+    # Don't pull front-line armor back through opposing guns, or pin the sole tank
+    # to home when an already committed small force has no substitute.
+    viable = [
+        u
+        for u in tanks
+        if (
+            u.distance_to(post) <= 16
+            or (phase is _Phase.GATHER and u.distance_to(halls[0]) <= 13)
+        )
+        and (
+            not siege_guard
+            or not any(
+                _inside_siege(
+                    u.position.towards(post, u.distance_to(post) * f),
+                    siege_guard.guns,
+                    1,
+                )
+                for f in (0.0, 0.25, 0.5, 0.75)
+            )
+        )
+    ]
+    if not viable or (
+        phase is _Phase.PRESSURE
+        and len(tanks) == 1
+        and _strength([u for u in ground if u.type_id in _BIO]) < 12
+    ):
+        return None
+    tank = min(
+        viable,
+        key=lambda u: (u.tag != state.reserve_tank, u.distance_to(post), u.tag),
+    )
+    state.reserve_tank = tank.tag
+    bio = [
+        u
+        for u in ground
+        if u.type_id in _BIO
+        and u.distance_to(post) <= 10
+        and (not siege_guard or not _inside_siege(u.position, siege_guard.guns, 1))
+    ]
+    infantry_count = sum(u.type_id in _BIO for u in ground)
+    state.reserve_bio = tuple(
+        u.tag
+        for u in sorted(
+            bio,
+            key=lambda u: (u.tag not in state.reserve_bio, u.distance_to(post), u.tag),
+        )[: min(2, infantry_count // 8) if contested else 0]
+    )
+    return post, {tank.tag, *state.reserve_bio}
+
+
+def _post_unit(
+    state: _CombatState, now: float, unit: Unit, enemies: list[Unit], post: Point2
+) -> None:
+    target, in_range = _select(unit, enemies, max_distance=14)
+    distance = unit.distance_to(post)
+    if unit.type_id == U.SIEGETANKSIEGED:
+        if target and in_range:
+            _send(state, now, unit, "attack", target)
+        elif distance > 3:
+            _send(state, now, unit, AbilityId.UNSIEGE_UNSIEGE)
+    elif (
+        unit.type_id == U.SIEGETANK
+        and distance <= 2
+        and not any(
+            _could_hit(unit, e) and _danger(e) and unit.distance_to(e) < 3
+            for e in enemies
+        )
+    ):
+        _send(state, now, unit, AbilityId.SIEGEMODE_SIEGEMODE)
+    elif target and in_range:
+        _send(state, now, unit, "attack", target)
+    elif distance > 2:
+        _send(state, now, unit, "move", post)
+    elif not unit.is_idle:
         _send(state, now, unit, AbilityId.HOLDPOSITION_HOLD)
 
 
@@ -1208,14 +1366,21 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
         for tag, when in state.air_evade_until.items()
         if tag in alive and when > now
     }
+    reserve = _natural_reserve(
+        bot, state, now, phase, ground, enemies, defense, siege_guard
+    )
+    post, reserve_tags = reserve if reserve else (None, set())
     screen = (
-        _armor_screen(ground, center, goal)
+        _armor_screen([u for u in ground if u.tag not in reserve_tags], center, goal)
         if pressure and not floating_cleanup
         else None
     )
     zones = _hazards(bot)
     for unit in army:
         if _evade(bot, state, now, unit, zones):
+            continue
+        if post is not None and unit.tag in reserve_tags:
+            _post_unit(state, now, unit, enemies, post)
             continue
         if siege_guard is not None and not unit.is_flying:
             _guard_line(bot, state, now, unit, contacts, siege_guard)

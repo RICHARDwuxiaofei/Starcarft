@@ -400,3 +400,94 @@ def test_defensive_line_releases_when_one_covering_tank_and_infantry_concentrate
     bot.time += 1
     asyncio.run(control_combat(bot, 2))
     assert squad[0].actions[-1] == ("attack", guns[0])
+
+
+def test_tank_moves_to_natural_post_then_sieges_before_contact():
+    tank = DummyUnit(1, U.SIEGETANK, point(21, 20), ground_range=7)
+    natural = DummyUnit(901, U.COMMANDCENTER, point(38, 38), is_structure=True)
+    bot = dummy_bot(units=[tank])
+    bot.townhalls.append(natural)
+    front = natural.position.towards(bot.game_info.map_center, 6)
+    # The straight post is unavailable: choose a nearby legal side position instead.
+    bot.in_pathing_grid = lambda p: p.distance_to(front) >= 0.1
+    asyncio.run(control_combat(bot, 0))
+    action, post = tank.actions[-1]
+    assert action == "move" and bot.in_pathing_grid(post)
+    assert 4 <= natural.distance_to(post) <= 8
+    tank.position = post
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert tank.actions[-1] == (AbilityId.SIEGEMODE_SIEGEMODE, None)
+    tank.type_id = U.SIEGETANKSIEGED
+    bot.time += 2
+    asyncio.run(control_combat(bot, 4))
+    assert len(tank.actions) == 2
+
+
+def test_contested_outer_keeps_only_a_small_natural_reserve():
+    natural = DummyUnit(901, U.COMMANDCENTER, point(34, 34), is_structure=True)
+    third = DummyUnit(902, U.COMMANDCENTER, point(63, 63), is_structure=True)
+    tank = DummyUnit(30, U.SIEGETANKSIEGED, point(38, 38), ground_range=13)
+    field_tank = DummyUnit(31, U.SIEGETANK, point(57, 58), ground_range=7)
+    marines = [
+        DummyUnit(i, U.MARINE, point(39, 39) if i <= 2 else point(57, 58))
+        for i in range(1, 17)
+    ]
+    attackers = [DummyUnit(100 + i, U.ROACH, point(64, 63)) for i in range(15)]
+    bot = dummy_bot(units=[tank, field_tank, *marines], enemies=attackers, now=390)
+    bot.townhalls.extend([natural, third])
+    asyncio.run(control_combat(bot, 0))
+    state = bot._mizuki_combat_state
+    assert state.reserve_tank == tank.tag and state.reserve_bio == (1, 2)
+    assert not tank.actions and not marines[0].actions
+    assert field_tank.actions and marines[-1].actions
+    attackers[0].is_snapshot = True
+    bot.enemy_units = attackers[:1]
+    bot.time += 3
+    asyncio.run(control_combat(bot, 2))
+    assert not tank.actions
+    assert state.outer_contest_until > bot.time
+
+
+def test_clear_local_advantage_releases_quiet_reserve_to_counterattack():
+    natural = DummyUnit(901, U.COMMANDCENTER, point(30, 30), is_structure=True)
+    third = DummyUnit(902, U.COMMANDCENTER, point(56, 56), is_structure=True)
+    tank = DummyUnit(30, U.SIEGETANKSIEGED, point(34, 34), ground_range=13)
+    marines = [DummyUnit(i, U.MARINE, point(53, 53)) for i in range(1, 14)]
+    attackers = [DummyUnit(100 + i, U.ROACH, point(57, 56)) for i in range(3)]
+    bot = dummy_bot(units=[tank, *marines], enemies=attackers, now=390)
+    bot.townhalls.extend([natural, third])
+    bot._mizuki_combat_state = _CombatState(
+        reserve_tank=tank.tag, outer_contest_until=398
+    )
+    asyncio.run(control_combat(bot, 0))
+    assert tank.actions == [(AbilityId.UNSIEGE_UNSIEGE, None)]
+    assert marines[-1].actions[-1][0] == "attack"
+
+
+def test_quiet_natural_post_does_not_hold_tank_during_clean_pressure():
+    natural = DummyUnit(901, U.COMMANDCENTER, point(32, 32), is_structure=True)
+    third = DummyUnit(902, U.COMMANDCENTER, point(47, 45), is_structure=True)
+    tank = DummyUnit(30, U.SIEGETANKSIEGED, point(36, 36), ground_range=13)
+    marines = [DummyUnit(i, U.MARINE, point(42, 40)) for i in range(1, 20)]
+    base = DummyUnit(200, U.HATCHERY, point(78, 78), is_structure=True)
+    bot = dummy_bot(units=[tank, *marines], structures=[base], now=440)
+    bot.townhalls.extend([natural, third])
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.phase is _Phase.PRESSURE
+    assert tank.actions == [(AbilityId.UNSIEGE_UNSIEGE, None)]
+
+
+def test_precontact_post_is_abandoned_if_firing_arc_covers_it():
+    natural = DummyUnit(901, U.COMMANDCENTER, point(34, 34), is_structure=True)
+    third = DummyUnit(902, U.COMMANDCENTER, point(57, 50), is_structure=True)
+    tank = DummyUnit(30, U.SIEGETANK, point(38, 38), ground_range=7)
+    guns = [
+        DummyUnit(90, U.SIEGETANKSIEGED, point(51, 38), ground_range=13),
+        DummyUnit(91, U.SIEGETANKSIEGED, point(52, 39), ground_range=13),
+    ]
+    bot = dummy_bot(units=[tank], enemies=guns, now=390)
+    bot.townhalls.extend([natural, third])
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.reserve_tank is None
+    assert tank.actions and tank.actions[0][0] == "move"

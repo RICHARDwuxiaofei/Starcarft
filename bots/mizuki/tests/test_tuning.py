@@ -120,6 +120,7 @@ def test_frame_error_does_not_look_like_completed_step():
         enemy_units=[],
         enemy_structures=[],
         _signals=Mock(return_value=Signals(4.5, 1, 0, 0, 0, 0, False)),
+        _evacuate_workers=Mock(),
         _distribute_economy=AsyncMock(side_effect=ValueError("only local details")),
     )
     with pytest.raises(ValueError):
@@ -411,13 +412,25 @@ def test_high_gas_does_not_allow_stock_worker_allocator_to_refill_refinery():
 
 def test_high_gas_mineral_allocator_moves_overflow_to_new_base_without_refilling_gas():
     base_a = SimpleNamespace(
-        tag=7, is_flying=False, surplus_harvesters=1, distance_to=lambda _: 2
+        tag=7,
+        position=point(16, 16),
+        is_flying=False,
+        surplus_harvesters=1,
+        distance_to=lambda _: 2,
     )
     base_b = SimpleNamespace(
-        tag=8, is_flying=False, surplus_harvesters=-2, distance_to=lambda _: 12
+        tag=8,
+        position=point(29, 16),
+        is_flying=False,
+        surplus_harvesters=-2,
+        distance_to=lambda _: 12,
     )
-    first = SimpleNamespace(tag=30, mineral_contents=700, distance_to=lambda _: 3)
-    second = SimpleNamespace(tag=31, mineral_contents=900, distance_to=lambda _: 3)
+    first = SimpleNamespace(
+        tag=30, position=point(14, 18), mineral_contents=700, distance_to=lambda _: 3
+    )
+    second = SimpleNamespace(
+        tag=31, position=point(31, 18), mineral_contents=900, distance_to=lambda _: 3
+    )
     minerals = {7: [first], 8: [second]}
     overflow = SimpleNamespace(
         tag=1,

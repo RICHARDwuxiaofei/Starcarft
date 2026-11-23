@@ -14,6 +14,7 @@ from sc2.position import Point2
 from sc2.unit import Unit
 
 from .combat import control_combat
+from .evacuation import MineralLineEvacuation
 from .policy import (
     Signals,
     air_targets,
@@ -82,6 +83,7 @@ class CompetitiveBot(BotAI):
     def __init__(self, *, trace: DecisionTrace | None = None) -> None:
         super().__init__()
         self._trace = trace
+        self._evacuation = MineralLineEvacuation()
         self._wall_anchors: (
             tuple[Point2 | None, Point2 | None, Point2 | None] | None
         ) = None
@@ -158,6 +160,8 @@ class CompetitiveBot(BotAI):
         structures = visible(self.enemy_structures)
         state = self._signals(contacts, structures)
 
+        if iteration % 2 == 0:
+            self._evacuate_workers(contacts)
         if iteration % 12 == 0:
             await self._distribute_economy()
         if iteration % 5 == 0:
@@ -384,6 +388,7 @@ class CompetitiveBot(BotAI):
                 m
                 for m in self.mineral_field.closer_than(10, orbital)
                 if m.mineral_contents > 100
+                and CompetitiveBot._safe_worker_point(self, m.position)
             ]
             if patches:
                 mineral = max(
@@ -437,12 +442,49 @@ class CompetitiveBot(BotAI):
             return True
         return False
 
+    def _evacuate_workers(self, contacts: list[Unit]) -> None:
+        evac = self._evacuation
+        relevant = [
+            enemy
+            for enemy in contacts
+            if enemy.tag in evac.zones
+            or (
+                enemy.type_id == U.SIEGETANKSIEGED
+                and not (enemy.is_cloaked and not enemy.is_revealed)
+                and (
+                    self.townhalls.closer_than(28, enemy)
+                    or self.workers.closer_than(17, enemy)
+                )
+            )
+        ]
+        evac.update(relevant, self.state.dead_units, self.time)
+        moved = self._evacuation.react(self, self.time)
+        if moved:
+            self._trace_intent(
+                "evacuate_workers",
+                orders=moved,
+                protected=len(self._evacuation.sheltered),
+            )
+
+    def _safe_worker_point(self, point: Point2) -> bool:
+        evac = getattr(self, "_evacuation", None)
+        return not evac or evac.margin(point) >= 0
+
+    def _allows_worker_task(self, worker: Unit, point: Point2 | None = None) -> bool:
+        evac = getattr(self, "_evacuation", None)
+        if not evac or not evac.zones:
+            return True
+        if worker.tag in evac.sheltered or evac.margin(worker.position) < 0:
+            return False
+        return point is None or evac.avoids_fire(worker.position, point)
+
     def _candidate_builders(self, position: Point2) -> list[Unit]:
         candidates = [
             w
             for w in self.workers
             if w.tag not in self.unit_tags_received_action
             and (w.is_idle or w.is_collecting)
+            and CompetitiveBot._allows_worker_task(self, w, position)
         ]
         return sorted(
             candidates,
@@ -453,24 +495,39 @@ class CompetitiveBot(BotAI):
         return next(iter(CompetitiveBot._candidate_builders(self, position)), None)
 
     async def _distribute_economy(self) -> None:
-        if not surplus_gas(self.minerals, self.vespene):
+        evac = getattr(self, "_evacuation", None)
+        if not (evac and evac.zones) and not surplus_gas(self.minerals, self.vespene):
             await self.distribute_workers(
                 resource_ratio=2.4 if self.time < 230 else 1.8
             )
             return
-        # The stock allocator can fill gas deficits despite its resource_ratio
-        # argument. Keep that allocator out of the high-gas branch entirely.
+        # The stock allocator ignores protected workers and unsafe targets.
+        # During a siege or gas surplus, use the filtered mineral allocator.
         self._distribute_minerals_only()
 
     def _distribute_minerals_only(self) -> None:
         fields = []
-        for hall in sorted(self.townhalls.ready, key=lambda h: h.tag):
-            if hall.is_flying:
+        evacuation = getattr(self, "_evacuation", None)
+        halls = sorted(
+            (h for h in self.townhalls.ready if not h.is_flying), key=lambda h: h.tag
+        )
+        for hall in halls:
+            if not CompetitiveBot._safe_worker_point(self, hall.position):
                 continue
             patches = [
                 m
                 for m in self.mineral_field.closer_than(9, hall)
                 if m.mineral_contents > 0
+                and CompetitiveBot._safe_worker_point(self, m.position)
+                and (
+                    not evacuation
+                    or not evacuation.zones
+                    or (
+                        hall.tag
+                        == min(halls, key=lambda h: (h.distance_to(m), h.tag)).tag
+                        and evacuation.avoids_fire(m.position, hall.position)
+                    )
+                )
             ]
             if patches:
                 fields.append((hall, patches))
@@ -506,13 +563,31 @@ class CompetitiveBot(BotAI):
             if isinstance(target, int):
                 targets[target] = targets.get(target, 0) + 1
         for w in sorted(idle, key=lambda u: u.tag) + overflow:
-            if w.tag in self.unit_tags_received_action:
+            if (
+                w.tag in self.unit_tags_received_action
+                or not CompetitiveBot._allows_worker_task(self, w)
+            ):
                 continue
-            free_fields = [(h, p) for h, p in fields if vacancies[h.tag] > 0]
+            reachable = [
+                (
+                    hall,
+                    [
+                        m
+                        for m in patches
+                        if CompetitiveBot._allows_worker_task(self, w, m.position)
+                    ],
+                )
+                for hall, patches in fields
+            ]
+            reachable = [(hall, patches) for hall, patches in reachable if patches]
+            if not reachable:
+                continue
+            free_fields = [(h, p) for h, p in reachable if vacancies[h.tag] > 0]
             if not free_fields and not w.is_idle:
-                break
+                continue
             hall, patches = min(
-                free_fields or fields, key=lambda hp: (hp[0].distance_to(w), hp[0].tag)
+                free_fields or reachable,
+                key=lambda hp: (hp[0].distance_to(w), hp[0].tag),
             )
             patch = min(
                 patches, key=lambda m: (targets.get(m.tag, 0), m.distance_to(w), m.tag)
@@ -533,9 +608,14 @@ class CompetitiveBot(BotAI):
                 if w.order_target in gas_tags
                 and not w.is_carrying_resource
                 and w.tag not in self.unit_tags_received_action
+                and CompetitiveBot._allows_worker_task(self, w)
             ]
             for w in sorted(gassers, key=lambda u: u.tag)[:2]:
-                patches = self.mineral_field.closer_than(14, w)
+                patches = [
+                    m
+                    for m in self.mineral_field.closer_than(14, w)
+                    if CompetitiveBot._allows_worker_task(self, w, m.position)
+                ]
                 if patches:
                     w.gather(min(patches, key=lambda m: (m.distance_to(w), m.tag)))
             return
@@ -549,6 +629,7 @@ class CompetitiveBot(BotAI):
                 and not w.is_carrying_resource
                 and (w.is_idle or w.is_gathering)
                 and w.order_target not in gas_tags
+                and CompetitiveBot._allows_worker_task(self, w, gas.position)
             ]
             workers.sort(key=lambda w: (not w.is_idle, w.distance_to(gas), w.tag))
             for w in workers[: min(2, -gas.surplus_harvesters)]:
@@ -1265,12 +1346,23 @@ class CompetitiveBot(BotAI):
         abandoned = self.structures_without_construction_SCVs
         if not abandoned:
             return
-        target = max(abandoned, key=lambda u: (u.build_progress, -u.tag))
+        target = max(
+            (
+                u
+                for u in abandoned
+                if CompetitiveBot._safe_worker_point(self, u.position)
+            ),
+            key=lambda u: (u.build_progress, -u.tag),
+            default=None,
+        )
+        if target is None:
+            return
         workers = [
             w
             for w in self.workers.closer_than(22, target)
             if (w.is_collecting or w.is_idle)
             and w.tag not in self.unit_tags_received_action
+            and CompetitiveBot._allows_worker_task(self, w, target.position)
         ]
         if workers:
             min(workers, key=lambda w: (w.distance_to(target), w.tag)).smart(target)
@@ -1285,7 +1377,9 @@ class CompetitiveBot(BotAI):
             near = [
                 w
                 for w in self.workers.closer_than(8, asset)
-                if w.is_collecting and w.tag not in self.unit_tags_received_action
+                if w.is_collecting
+                and w.tag not in self.unit_tags_received_action
+                and CompetitiveBot._allows_worker_task(self, w, asset.position)
             ]
             if near and not any(
                 w.is_repairing for w in self.workers.closer_than(7, asset)

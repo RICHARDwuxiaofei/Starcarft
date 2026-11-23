@@ -115,6 +115,7 @@ def test_frame_dispatch_only_directs_visible_units(monkeypatch):
         _orbitals=Mock(),
         _depot_control=Mock(),
         _macro=AsyncMock(),
+        _evacuate_workers=Mock(),
         _track_base_losses=Mock(),
         _update_expansion_risk=Mock(),
     )
@@ -124,6 +125,7 @@ def test_frame_dispatch_only_directs_visible_units(monkeypatch):
     agent._signals.assert_called_once_with([contact], [])
     agent._scout.assert_called_once_with([contact])
     agent._macro.assert_awaited_once_with(signals)
+    agent._evacuate_workers.assert_called_once_with([contact])
     agent._track_base_losses.assert_called_once_with()
     agent._update_expansion_risk.assert_called_once_with([contact], [])
     combat.assert_awaited_once_with(agent, 0)
