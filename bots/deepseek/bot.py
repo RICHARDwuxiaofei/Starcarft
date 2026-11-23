@@ -309,9 +309,9 @@ class CompetitiveBot(BotAI):
         if not opening:
             await self._manage_structures()
         self._manage_tech()
-        self._manage_army_production()
         if not opening:
             await self._manage_expansion()
+        self._manage_army_production()
         self._manage_scouting()
         await self._manage_defense()
         await self._manage_air_defense()
@@ -767,6 +767,9 @@ class CompetitiveBot(BotAI):
         """按优先级研究：兴奋剂 > 盾牌 > +1 攻 > +1 防 > +2 ..."""
         if not self.townhalls:
             return
+        # 分矿未开工前先攒 400 矿，科技晚一点不影响运营节奏。
+        if not self._open_cc and self.minerals < 500:
+            return
         priorities = (
             UpgradeId.STIMPACK,
             UpgradeId.SHIELDWALL,
@@ -793,8 +796,11 @@ class CompetitiveBot(BotAI):
             return
         if self.supply_left <= 0:
             return
-        # 分矿开工前只保留少量守家兵力，优先攒 400 矿。
-        if not self._open_cc and self._threat_level == 0 and self.minerals < 250:
+        # 分矿还没开工时，优先攒 400 矿，不提前把资源变成兵。
+        if self._threat_level == 0 and not self._open_cc:
+            return
+        # 还缺基地且钱不够时先攒钱；威胁当前时允许花钱防守。
+        if self._threat_level == 0 and self._expansion_wanted() and self.minerals < 450:
             return
 
         marines = self.units(UnitTypeId.MARINE).amount
@@ -1051,6 +1057,19 @@ class CompetitiveBot(BotAI):
             return
 
     # ---- 部队指挥 ---------------------------------------------------------
+
+    def _expansion_wanted(self) -> bool:
+        """按当前时间/农民/兵力，是否还缺基地。"""
+        if not self._expansions:
+            return False
+        desired = desired_base_count(
+            self.time,
+            self.workers.amount,
+            self._army_supply(),
+            len(self.townhalls),
+            self._threat_level,
+        )
+        return len(self.townhalls) < desired
 
     def _army_units(self):
         return self.units(ARMY_TYPES)
