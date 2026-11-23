@@ -9,9 +9,9 @@
 | 云端 Python | 3.12.14，Linux |
 | 游戏库 | `burnysc2==7.3.0`；未安装废弃的 `sc2` 发行包 |
 | 测试工具 | `pytest==9.2.0`、`ruff==0.17.6` |
-| `python -m pytest bots/webgpt/tests -q` | **129 passed**，一次完整运行耗时0.87秒；这是测试耗时，不是游戏性能指标 |
+| `python -m pytest bots/webgpt/tests -q` | **132 passed**，一次完整运行耗时0.96秒；这是测试耗时，不是游戏性能指标 |
 | `ruff check bots/webgpt` | 通过 |
-| `ruff format --check bots/webgpt` | 21个Python文件格式检查通过 |
+| `ruff format --check bots/webgpt` | 全部检查通过 |
 | `python -m compileall -q bots/webgpt` | 通过 |
 | `python -m bots.webgpt.run --help` | 通过；帮助路径不会启动游戏 |
 | `python -S -m bots.webgpt.run --help` | 测试覆盖；不依赖 site-packages 仍可显示帮助 |
@@ -43,8 +43,11 @@
 | 经济重建 | 0基地、1SCV、400矿、0人口上限时完整决策只下达指挥中心建造，不先把钱花到补给或兵营 |
 | 边界状态 | 全无单位；12/13工人上限的开局补给；建筑pending不重复计数；建造工人不被采矿逻辑抢走 |
 | 结果真实性 | 未决结果、互相冲突的胜负、脚本错误、中断、无回放、平局分别记录，不伪造获胜或回放 |
+| Windows中文输出 | 在强制cp1252管道环境下正确输出中文帮助/错误信息；StringIO捕获流不被替换或关闭 |
 
-上述测试暴露的问题已修复，并保留回归用例。
+上述测试暴露的问题已修复，并保留回归用例。首次GitHub Windows检查发现中文帮助在默认管道编码下
+可能触发UnicodeEncodeError；启动器现在在参数解析前统一支持重配置的stdout/stderr为UTF-8，
+并新增3个回归用例。后续两套平台检查以该分支最新提交的Actions结果为准。
 
 ## 后续实战验收
 

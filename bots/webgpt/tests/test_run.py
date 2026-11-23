@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from enum import Enum
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -106,11 +108,50 @@ def test_help_works_without_site_packages():
         [sys.executable, "-S", "-m", "bots.webgpt.run", "--help"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=10,
         check=False,
     )
     assert result.returncode == 0
     assert "--check" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_code", "stream", "chinese_text"),
+    [
+        (["--help"], 0, "stdout", "人族 Bot"),
+        (["--seed", "-1"], 2, "stderr", "必须是非负整数"),
+    ],
+)
+def test_cli_chinese_output_with_legacy_pipe_encoding(
+    arguments, expected_code, stream, chinese_text
+):
+    environment = os.environ.copy()
+    environment["PYTHONIOENCODING"] = "cp1252"
+    result = subprocess.run(
+        [sys.executable, "-S", "-m", "bots.webgpt.run", *arguments],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=environment,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == expected_code
+    assert chinese_text in getattr(result, stream)
+    assert "UnicodeEncodeError" not in result.stderr
+
+
+def test_main_preserves_stringio_capture_streams(monkeypatch):
+    stdout, stderr = StringIO(), StringIO()
+    monkeypatch.setattr(sys, "stdout", stdout)
+    monkeypatch.setattr(sys, "stderr", stderr)
+    with pytest.raises(SystemExit) as stopped:
+        run.main(["--help"])
+    assert stopped.value.code == 0
+    assert sys.stdout is stdout and sys.stderr is stderr
+    assert "人族 Bot" in stdout.getvalue()
+    assert not stdout.closed and not stderr.closed
 
 
 def test_check_never_constructs_bot_or_calls_game(backend, monkeypatch, capsys):

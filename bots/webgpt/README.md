@@ -139,6 +139,7 @@ python -m bots.webgpt.run --opponent-bot bots.other.bot:CompetitiveBot --opponen
 进程退出码：`0`为有效结果且回放非空；`1`为脚本/游戏/结果异常；`2`为配置或环境问题；
 `3`为取得结果但未保存有效回放；`130`为用户中断。平局或达到游戏时限不记作胜利。
 如果进程被外部强杀，报告可能停在 `STARTING/RUNNING`，这不是终局结果。
+命令行重定向输出统一使用UTF-8，其他程序读取其stdout/stderr时也应明确按UTF-8解码。
 
 启动器不会自动修显卡、终止其他 Python 进程或修改防火墙。此前桌面客户端出现过 D3D9 初始化错误；
 代码测试通过不能消除这个独立的运行环境问题，真实启动失败时应检查 SC2 的 `GameLogs`。

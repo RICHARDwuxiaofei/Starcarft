@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import hashlib
 import importlib
 import importlib.metadata
@@ -43,6 +44,29 @@ FINAL_RESULTS = {"Victory", "Defeat", "Tie"}
 
 class ConfigurationError(RuntimeError):
     """可在启动游戏前解释给用户的环境或参数问题。"""
+
+
+def _configure_utf8_output() -> None:
+    """CLI 文本统一使用 UTF-8，包括 Windows 重定向到管道后的中文帮助。
+
+    只调整支持 reconfigure 的实际文本流；pytest、StringIO 和其他嵌入式
+    调用者可能提供不可重设的捕获流，这时保留调用者的流，不替换或关闭它。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = getattr(stream, "encoding", None)
+        if not callable(reconfigure) or not isinstance(encoding, str):
+            continue
+        try:
+            if codecs.lookup(encoding).name == "utf-8":
+                continue
+        except LookupError:
+            pass
+        try:
+            reconfigure(encoding="utf-8")
+        except (OSError, ValueError):
+            # 例如被宿主锁定的文本流：不因不能改变捕获方式而中止检查/比赛。
+            continue
 
 
 def _nonnegative(value: str) -> int:
@@ -394,6 +418,8 @@ def run_match(
 
 
 def main(argv: list[str] | None = None) -> int:
+    # argparse 在解析 --help 或参数错误时就会写 stdout/stderr，必须先设编码。
+    _configure_utf8_output()
     args = build_parser().parse_args(argv)
     try:
         validate_arguments(args)
