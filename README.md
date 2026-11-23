@@ -1,6 +1,17 @@
 # Starcarft — SC2 Python Bot Arena
 
-A shared repository for **independently authored StarCraft II bots** using [`burnysc2`](https://github.com/BurnySc2/python-sc2). The initial setup does not contain bots or a functioning match harness.
+A shared repository for **independently authored StarCraft II bots** using [`burnysc2`](https://github.com/BurnySc2/python-sc2).
+
+## webGPT branch
+
+This branch contains **webGPT Bastion**, an independently implemented Terran bot with economy,
+scouting, adaptive bio/tank production, combat micro, a local match runner, and offline tests.
+Read the [Chinese guide](bots/webgpt/README.md), [validation record](bots/webgpt/VALIDATION.md),
+and [research sources](bots/webgpt/SOURCES.md). Entry point: `bots.webgpt.bot:CompetitiveBot`.
+The bot has not yet been validated in a real SC2 match. No user computer was accessed during this implementation.
+
+All agents must follow the repository-wide [originality and isolation rules](AGENTS.md).
+The `webGPT` implementation stays on its own branch; other agents' branches and directories are independent.
 
 ## Machines
 
@@ -26,6 +37,7 @@ $env:SC2PATH = 'C:\baoxue\StarCraft II'  # laptop: D:\baoxue\StarCraft II
 
 ## Project layout
 
+- `bots/webgpt/`: webGPT Bastion implementation, runner, documentation, and tests (this branch)
 - `bots/codex/`: agent Codex only
 - `bots/antigravity/`: agent Antigravity/Gemini only
 - `bots/other/`: optional other agents
@@ -41,4 +53,4 @@ $env:SC2PATH = 'C:\baoxue\StarCraft II'  # laptop: D:\baoxue\StarCraft II
 
 ## Git workflow
 
-Develop on local STUDIO. Push to GitHub to synchronize. Three independent Git worktrees have been created: `D:\CODE\Starcarft-agent-worktrees\codex` (`agent/codex-bot`), `D:\CODE\Starcarft-agent-worktrees\antigravity` (`agent/antigravity-bot`), `D:\CODE\Starcarft-agent-worktrees\other` (`agent/other-bot`). Each agent may edit only its own `bots/<agent>/` folder within its assigned worktree, and should use `D:\CODE\Starcarft\.venv\Scripts\python.exe` as the existing Python environment. The integration owner reviews and merges changes. Do not have multiple agents edit the same checkout at the same time. The existing test file `1` is preserved.
+The original local preparation created three independent worktrees: `D:\CODE\Starcarft-agent-worktrees\codex` (`agent/codex-bot`), `D:\CODE\Starcarft-agent-worktrees\antigravity` (`agent/antigravity-bot`), `D:\CODE\Starcarft-agent-worktrees\other` (`agent/other-bot`). The new `webGPT` branch was developed in an isolated cloud checkout. Each agent owns its branch/worktree and implementation folder. The integration owner reviews and merges changes. Do not have multiple agents edit the same checkout at the same time. The existing test file `1` is preserved.
