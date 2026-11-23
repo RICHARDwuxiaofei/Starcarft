@@ -165,3 +165,18 @@ def test_missing_fresh_replay_still_exports_diagnostics_without_loading_old_file
     assert "older replay was not reused" in result["errors"][0]["error"]
     assert result["local_smoke"]["decision_trace"]["steps_completed"] == 0
     parse.assert_not_called()
+
+
+def test_burny_install_path_system_exit_produces_review_json(tmp_path, monkeypatch):
+    replay = tmp_path / "previous.SC2Replay"
+    replay.write_bytes(b"old replay")
+    out = tmp_path / "analysis.json"
+    monkeypatch.setattr(smoke.maps, "get", Mock(side_effect=SystemExit(1)))
+    parse = Mock(side_effect=AssertionError("An old replay must not be loaded"))
+    monkeypatch.setattr(replay_review, "parse_replay", parse)
+    assert smoke.main(["--replay", str(replay), "--review-json", str(out)]) != 0
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert not result["matches"]
+    assert result["local_smoke"]["launcher_failure_phase"] == "map_lookup"
+    assert "SystemExit" in result["errors"][0]["error"]
+    parse.assert_not_called()

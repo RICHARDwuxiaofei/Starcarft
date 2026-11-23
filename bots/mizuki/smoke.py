@@ -67,12 +67,14 @@ def main(argv: list[str] | None = None) -> int:
     trace = DecisionTrace() if args.review_json is not None else None
     previous = _replay_stamp(args.replay) if trace is not None else None
     failure = None
+    phase = "map_lookup"
     try:
         arena = maps.get(args.map)
         players = [
             Bot(Race.Terran, CompetitiveBot(trace=trace), name="Mizuki"),
             Computer(Race[args.race], Difficulty[args.difficulty]),
         ]
+        phase = "engine_run"
         outcome = run_game(
             arena,
             players,
@@ -82,13 +84,16 @@ def main(argv: list[str] | None = None) -> int:
             game_time_limit=args.seconds,
             save_replay_as=str(args.replay) if args.replay else None,
         )
-    except Exception as exc:
+    except (Exception, SystemExit) as exc:
+        # burnysc2's path discovery exits the process if SC2PATH is wrong.
+        # When a review was requested, keep a machine-readable failure instead.
         if trace is None:
             raise
         outcome = None
         failure = (
-            f"SC2 launcher failed ({type(exc).__name__}); no current replay analyzed."
+            f"SC2 failed at {phase} ({type(exc).__name__}); no current replay analyzed."
         )
+
     if outcome is None and failure is None:
         failure = "No SC2 result returned."
     if failure is not None and trace is None:
@@ -103,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         "seed": args.seed,
         "game_time_limit_seconds": args.seconds,
         "realtime": args.realtime,
+        "launcher_failure_phase": phase if failure is not None else None,
     }
     print(json.dumps(context))
     if args.review_json is not None and trace is not None:
@@ -111,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
         latest = _replay_stamp(args.replay)
         if failure is None and (latest is None or latest == previous or latest[0] == 0):
             failure = "SC2 did not write a new nonempty replay; an older replay was not reused."
+            context["launcher_failure_phase"] = "replay_write"
         aborted = trace.last_error is not None or (
             context["result"] == "Defeat"
             and not trace.start_completed

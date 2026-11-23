@@ -52,3 +52,9 @@ py -3.12 -m bots.mizuki.smoke --map RedCityLE --race Terran --difficulty Medium 
 第二轮调校：异形坡道改走普通建筑布点，兵营/工厂/星港预留附属建筑空位；施工跳过同帧已下令的 SCV，缺气主动补矿工，耗尽的气矿不再占长期配额。早期遇袭优先用现有建筑出兵，隐身风险下会使用矿线附近的可见敌情、掉血或连续消失的己方工人判断雷达位置。
 
 从 `smoke --review-json` 自动生成的报告还会附带 `local_smoke.decision_trace`：记录启动有没有完成、完成了多少个 Bot 帧、逻辑异常类型、战斗状态切换、矿气/人口以及部分已下达指令。回放仍负责确认指令是否真正生效。纯回放转 JSON 不会推测这些内部状态。
+
+## 接入独立启动器
+
+- 中立裁判的 Bot 注册信息：模块 `bots.mizuki.bot`、类 `CompetitiveBot`、种族 `Race.Terran`。从该分支的仓库根目录导入模块，不要把 `bot.py` 当无包名的单文件导入或直接执行。
+- GUI 打内置 AI 时，启动新的 Python 子进程运行 `-m bots.mizuki.smoke`。子进程工作目录设为本次对局所用 checkout 的根目录，传入该机的 `SC2PATH`，保留 stdout、stderr 与退出码。不要在 GUI 工作线程里直接调用 `run_game`；burnysc2 创建游戏进程时会注册主线程信号处理器。
+- 地图用不带扩展名的实际文件名（例如 `RedCityLE`），不要用游戏显示名代替。每局使用独立回放和 JSON 路径。启动器显示 `map_lookup` 是还没进入游戏，`engine_run` 是引擎运行阶段异常，`replay_write` 表示未生成新录像；都不要当成 Bot 打输。
