@@ -1,0 +1,43 @@
+{
+  "scope": "Recorded natural wins from the first four-bot round robin through the Mizuki Gen 8 tests",
+  "baseline": 1500,
+  "k": 32,
+  "rated_matches": 17,
+  "players": [
+    {
+      "agent": "webgpt",
+      "elo": 1570.98,
+      "wins": 5,
+      "losses": 0,
+      "last_rated_commit": "42d469af"
+    },
+    {
+      "agent": "codex",
+      "elo": 1533.15,
+      "wins": 6,
+      "losses": 3,
+      "last_rated_commit": "cb7618d"
+    },
+    {
+      "agent": "antigravity",
+      "elo": 1524.5,
+      "wins": 4,
+      "losses": 3,
+      "last_rated_commit": "7f20fad"
+    },
+    {
+      "agent": "mizuki",
+      "elo": 1468.67,
+      "wins": 2,
+      "losses": 4,
+      "last_rated_commit": "ff370ba"
+    },
+    {
+      "agent": "deepseek",
+      "elo": 1402.7,
+      "wins": 0,
+      "losses": 7,
+      "last_rated_commit": "0c8349b"
+    }
+  ]
+}

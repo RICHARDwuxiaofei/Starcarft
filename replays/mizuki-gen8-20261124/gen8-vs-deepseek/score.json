@@ -1,0 +1,25 @@
+{
+  "method": "army_minerals + army_vespene + 50 * active_workers",
+  "build": 98745,
+  "sample_game_loop": 25122,
+  "sample_seconds_on_faster": 1121.518,
+  "players": [
+    {
+      "player_id": 1,
+      "name": "deepseek",
+      "army_minerals": 0,
+      "army_vespene": 0,
+      "active_workers": 0,
+      "points": 0
+    },
+    {
+      "player_id": 2,
+      "name": "mizuki",
+      "army_minerals": 6100,
+      "army_vespene": 2300,
+      "active_workers": 78,
+      "points": 12300
+    }
+  ],
+  "score_leader": "mizuki"
+}
