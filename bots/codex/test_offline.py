@@ -429,6 +429,121 @@ class ArenaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(b.abilities, [A.BARRACKSTRAIN_MARINE])
         self.assertTrue(b.actions[0].queue)
 
+    async def test_second_barracks_precedes_starport_in_ground_opening(self):
+        b = self.bot
+        b.frame(220)
+        b.set_resources(200, 110, 24, 45)
+        b.observation(
+            workers=self.workers(18),
+            army=self.army(4, 0, 0),
+            buildings=[
+                self.home(U.ORBITALCOMMAND),
+                b.unit(U.COMMANDCENTER, 2, NATURAL, build_progress=0.4),
+                b.unit(U.SUPPLYDEPOT, 3),
+                b.unit(U.BARRACKS, 4),
+                b.unit(U.FACTORY, 5),
+            ],
+        )
+        await b.on_step(0)
+        self.assertIn(A.TERRANBUILD_BARRACKS, b.abilities)
+        self.assertNotIn(A.TERRANBUILD_STARPORT, b.abilities)
+
+    async def test_air_alert_keeps_starport_priority(self):
+        b = self.bot
+        b.frame(220)
+        b.last_air = b.time
+        b.set_resources(200, 110, 24, 45)
+        b.observation(
+            workers=self.workers(18),
+            army=self.army(4, 0, 0),
+            buildings=[
+                self.home(U.ORBITALCOMMAND),
+                b.unit(U.SUPPLYDEPOT, 3),
+                b.unit(U.BARRACKS, 4),
+                b.unit(U.FACTORY, 5),
+            ],
+        )
+        await b.on_step(0)
+        self.assertIn(A.TERRANBUILD_STARPORT, b.abilities)
+        self.assertNotIn(A.TERRANBUILD_BARRACKS, b.abilities)
+
+    async def test_early_addons_leave_a_marine_queue_available(self):
+        b = self.bot
+        b.scout_used = True
+        b.set_resources(150, 100, 20, 45)
+        first = b.unit(U.BARRACKS, 2)
+        second = b.unit(U.BARRACKS, 3)
+        b.observation(army=self.army(5, 0, 0), buildings=[first])
+        await b._army_production(False, False)
+        self.assertEqual(b.abilities, [A.BARRACKSTRAIN_MARINE])
+
+        b.frame(221)
+        b.set_resources(150, 100, 20, 45)
+        b.observation(army=self.army(5, 0, 0), buildings=[first, second])
+        await b._army_production(False, False)
+        self.assertEqual(b.abilities, [A.BUILD_TECHLAB_BARRACKS, A.BARRACKSTRAIN_MARINE])
+
+    async def test_sweep_preserves_progressing_goal_until_seen(self):
+        b = self.bot
+        b.now = 700
+        b.visible = []
+        b.visible_points.add(ENEMY)
+        self.assertEqual(b._attack_goal(Point2((39, 40))), NATURAL)
+
+        b.now = 717
+        self.assertEqual(b._attack_goal(Point2((52, 47))), NATURAL)
+        b.now = 725
+        self.assertEqual(b._attack_goal(Point2((59, 51))), NATURAL)
+
+        b.visible_points.add(NATURAL)
+        self.assertNotEqual(b._attack_goal(Point2((59, 51))), NATURAL)
+        self.assertEqual(b.sweep_retry[NATURAL], 815)
+
+    async def test_sweep_changes_objective_when_progress_stops(self):
+        b = self.bot
+        b.now = 700
+        b.visible = []
+        point = Point2((44, 46))
+        self.assertEqual(b._attack_goal(point), ENEMY)
+        b.now = 717
+        self.assertEqual(b._attack_goal(point), ENEMY)
+        b.now = 718
+        self.assertEqual(b._attack_goal(point), NATURAL)
+        self.assertEqual(b.sweep_retry[ENEMY], 763)
+
+    async def test_push_holds_rear_rendezvous_and_does_not_recall_lead_units(self):
+        b = self.bot
+        b.next_macro = inf
+        b.mode = "push"
+        rear, lead = 220, 221
+
+        def observe(center):
+            army = [
+                *(b.unit(U.MARINE, tag, center) for tag in range(200, 207)),
+                b.unit(U.MARINE, rear, Point2((20, 30))),
+                b.unit(U.MARINE, lead, Point2((80, 74))),
+            ]
+            b.observation(army=army, buildings=[self.home()])
+
+        start = Point2((50, 50))
+        b.frame(700)
+        observe(start)
+        await b.on_step(0)
+        self.assertEqual(b.commands[rear][0], (A.ATTACK, start))
+        self.assertEqual(b.commands[lead][0], (A.ATTACK, ENEMY))
+
+        b.frame(700.5)
+        observe(Point2((51, 51)))
+        await b.on_step(1)
+        self.assertFalse(any(a.unit.tag == rear for a in b.actions))
+
+        advanced = Point2((57, 51))
+        b.frame(704)
+        observe(advanced)
+        await b.on_step(2)
+        self.assertEqual(b.commands[rear][0], (A.ATTACK, advanced))
+        self.assertEqual(b.commands[lead][0], (A.ATTACK, ENEMY))
+
     async def test_first_push_then_loss_and_second_push(self):
         b = self.bot
         b.next_macro = inf

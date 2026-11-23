@@ -1,7 +1,7 @@
 """Terran bio and tank pressure for the Starcarft arena."""
 
 from collections import Counter
-from math import inf
+from math import hypot, inf
 from statistics import median
 
 from sc2.bot_ai import BotAI
@@ -93,6 +93,13 @@ class CompetitiveBot(BotAI):
         self.regroup_until = 0.0
         self.push_peak = 0.0
         self.push_started = 0.0
+        self.attack_destination = None
+        self.sweep_goal = None
+        self.sweep_distance = inf
+        self.sweep_progress_at = 0.0
+        self.sweep_retry = {}
+        self.reinforce_point = None
+        self.reinforce_updated_at = 0.0
         self.last_pressure = -inf
         self.last_air = -inf
         self.air_count = 0
@@ -478,6 +485,9 @@ class CompetitiveBot(BotAI):
 
         if stressed and self.now < 320 and not self._macro_count(U.BUNKER):
             await self._build(U.BUNKER, self._defense_point())
+        # Start another infantry queue before air support when the ground opening is established.
+        if barracks == 1 and factories and bio >= 4 and not air_alert:
+            await self._build(U.BARRACKS, rally)
         if starports == 0 and factories and (halls >= 2 or cc_pending or air_alert or self.now >= 230):
             await self._build(U.STARPORT, home)
         barracks_goal = min(8, 1 + halls * 2 + int(self.minerals >= 850))
@@ -569,13 +579,14 @@ class CompetitiveBot(BotAI):
             for u in buildings
             if u.type_id == U.FACTORY and u.is_idle and not u.add_on_tag and self.can_afford(U.FACTORYTECHLAB)
         ]
+        infantry_queues = [u for u in buildings if u.type_id == U.BARRACKS]
         barracks_needs_addon = [
             u
-            for u in buildings
-            if u.type_id == U.BARRACKS
-            and u.is_idle
+            for u in infantry_queues
+            if u.is_idle
             and not u.add_on_tag
             and marine >= 5
+            and (len(infantry_queues) >= 2 or marine >= 10)
             and not stressed
             and self.vespene >= 50
         ]
@@ -594,6 +605,8 @@ class CompetitiveBot(BotAI):
             ):
                 reserved.add(factory.tag)
         for hall in barracks_needs_addon:
+            if has_barracks_lab and marine < 10:
+                break
             ability, kind = (
                 (A.BUILD_REACTOR_BARRACKS, U.BARRACKSREACTOR)
                 if has_barracks_lab
@@ -633,8 +646,8 @@ class CompetitiveBot(BotAI):
             elif medivacs < medivac_goal:
                 medivacs += self._train(port, U.MEDIVAC)
 
-        for barrack in buildings:
-            if barrack.type_id != U.BARRACKS or barrack.tag in reserved:
+        for barrack in infantry_queues:
+            if barrack.tag in reserved:
                 continue
             if len(barrack.orders) >= (2 if barrack.add_on_tag in reactors else 1):
                 continue
@@ -833,31 +846,75 @@ class CompetitiveBot(BotAI):
 
     def _attack_goal(self, center):
         seen = [e for e in self.visible if e.is_structure]
-        if seen:
-            return min(
-                seen, key=lambda e: (e.distance_to_squared(center) + (90 if e.is_flying else 0), e.tag)
-            ).position
-        if self.enemy_sites:
+        if seen or self.enemy_sites:
+            self.sweep_goal = None
+            if seen:
+                return min(
+                    seen, key=lambda e: (e.distance_to_squared(center) + (90 if e.is_flying else 0), e.tag)
+                ).position
             return min(self.enemy_sites.values(), key=lambda p: (point_distance_squared(p, center), p))
-        if self.last_seen[self.enemy_start] < self.now - 75:
-            return self.enemy_start
+
+        goal = self.sweep_goal
+        if goal is not None:
+            distance = center.distance_to(goal)
+            if distance <= self.sweep_distance - 3:
+                self.sweep_distance = distance
+                self.sweep_progress_at = self.now
+            covered = self.is_visible(goal)
+            if not covered and self.now - self.sweep_progress_at < 18:
+                return goal
+            self.sweep_retry[goal] = self.now + (90 if covered else 45)
+
         candidates = [
             p
             for p, t in self.last_seen.items()
-            if t < self.now - 6 and not any(h.distance_to_squared(p) < 8**2 for h in self.townhalls)
+            if t < self.now - 6
+            and self.now >= self.sweep_retry.get(p, 0)
+            and not self.is_visible(p)
+            and not any(h.distance_to_squared(p) < 8**2 for h in self.townhalls)
         ]
-        return min(
+        self.sweep_goal = min(
             candidates,
             key=lambda p: (
+                p != self.enemy_start or self.last_seen[p] >= self.now - 75,
                 point_distance_squared(p, center) + 6 * max(-180, self.last_seen[p] - self.now),
                 p,
             ),
-            default=self.enemy_start,
+            default=None,
         )
+        if self.sweep_goal is None:
+            return center
+        self.sweep_distance = center.distance_to(self.sweep_goal)
+        self.sweep_progress_at = self.now
+        return self.sweep_goal
+
+    def _reinforcement_rally(self, center, ground):
+        point = self.reinforce_point
+        if point is None or (
+            self.now - self.reinforce_updated_at >= 3 and point_distance_squared(center, point) >= 6**2
+        ):
+            anchor = min(ground, key=lambda u: (u.distance_to_squared(center), u.tag))
+            self.reinforce_point = self._walkable(center, anchor.position)
+            self.reinforce_updated_at = self.now
+        return self.reinforce_point
+
+    @staticmethod
+    def _trailing(unit, center, goal):
+        if unit.is_flying or unit.distance_to_squared(center) <= 18**2:
+            return False
+        x, y = goal.x - center.x, goal.y - center.y
+        length = hypot(x, y)
+        if length < 4:
+            return unit.distance_to_squared(goal) > 18**2
+        progress = (unit.position.x - center.x) * x + (unit.position.y - center.y) * y
+        return progress < -6 * length
 
     def _regroup(self):
         self.mode = "regroup"
         self.regroup_until = self.now + 24
+        self.attack_destination = None
+        self.sweep_goal = None
+        self.reinforce_point = None
 
     def _set_mode(self, force, local, opposition, pressured, cohesion, scaled):
         if self.mode == "push":
@@ -913,15 +970,17 @@ class CompetitiveBot(BotAI):
         )
 
         rally = self._defense_point() if pressed else self._rally()
-        goal = self._attack_goal(center) if self.mode == "push" else rally
+        pushing = self.mode == "push"
+        self.attack_destination = self._attack_goal(center) if pushing else None
+        goal = self.attack_destination if pushing else rally
+        reinforce = self._reinforcement_rally(center, ground) if pushing and ground else center
         bound = self._garrison(army)
         frontline = [u for u in ground if u.tag not in bound]
 
         for unit in army:
             if unit.tag in bound:
                 continue
-            tail = self.mode == "push" and unit.distance_to_squared(center) > 18**2
-            destination = center if tail else goal
+            destination = reinforce if pushing and self._trailing(unit, center, goal) else goal
             if pressed and unit.type_id not in TANKS and self.raiders:
                 intruder = min(self.raiders, key=lambda e: (e.distance_to_squared(rally), e.tag))
                 if intruder.can_be_attacked and (
@@ -1129,10 +1188,13 @@ class CompetitiveBot(BotAI):
             self._scan(orbitals.pop(0), suspect.position)
         elif suspected_point is not None:
             self._scan(orbitals.pop(0), suspected_point)
-        elif self.mode == "push" and self.now - self.last_scan > 65 and orbitals[0].energy >= 100:
-            goal = self._attack_goal(self._rally())
-            if not self.is_visible(goal):
-                self._scan(orbitals.pop(0), goal)
+        elif (
+            self.attack_destination is not None
+            and self.now - self.last_scan > 65
+            and orbitals[0].energy >= 100
+            and not self.is_visible(self.attack_destination)
+        ):
+            self._scan(orbitals.pop(0), self.attack_destination)
 
         reserve = 50 if self.now >= 255 or self.now - self.last_cloak < 120 else 0
         if not orbitals or (len(orbitals) == 1 and orbitals[0].energy < 50 + reserve):
