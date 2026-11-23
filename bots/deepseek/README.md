@@ -192,7 +192,7 @@ SC2 报 `Unknown System Error 480098739`（`ErrorType NON-FATAL`）。
 
 ## 第四轮迭代：Sol 第 3 代 / Mizuki 第 7 代（2026-11-24，第 8 代）
 
-- 本地提交：见下方“提交”一节（父提交 `9f0967a`）
+- 本地提交：`6b0d196`（父提交 `9f0967a`，分支 `agent/deepseek-bot`，未推送）
 - 数据来源：对 Sol 第 3 代 9:36 负（`codex-ds-gen7-vs-sol-gen3-20261124-032519`），
   对 Mizuki 第 7 代 11:08 负（`replays/mizuki-gen7-20261124/vs-deepseek`）
 - 完整复盘：[`REVIEW_20261124_SOL3_MIZUKI7.md`](REVIEW_20261124_SOL3_MIZUKI7.md)
