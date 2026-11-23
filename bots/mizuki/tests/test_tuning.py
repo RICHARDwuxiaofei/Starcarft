@@ -119,7 +119,7 @@ def test_frame_error_does_not_look_like_completed_step():
         enemy_units=[],
         enemy_structures=[],
         _signals=Mock(return_value=Signals(4.5, 1, 0, 0, 0, 0, False)),
-        distribute_workers=AsyncMock(side_effect=ValueError("only local details")),
+        _distribute_economy=AsyncMock(side_effect=ValueError("only local details")),
     )
     with pytest.raises(ValueError):
         asyncio.run(CompetitiveBot.on_step(fake, 0))
@@ -338,3 +338,91 @@ def test_surplus_gas_returns_idle_cargo_free_workers_to_local_minerals():
     )
     CompetitiveBot._staff_refineries(agent)
     gather.assert_called_once_with(patch)
+
+
+def test_unobserved_command_center_order_cools_down_only_that_site():
+    from bots.mizuki.bot import Contact
+
+    site = point(42, 40)
+    agent = SimpleNamespace(
+        time=110,
+        townhalls=[],
+        _expansion_intent=Contact(site, 109),
+        _blocked_expansions={},
+        _trace_intent=Mock(),
+    )
+    assert CompetitiveBot._expansion_pending(agent, False)
+    assert not agent._blocked_expansions
+    agent.time = 112
+    assert not CompetitiveBot._expansion_pending(agent, False)
+    assert agent._blocked_expansions == {site: 130}
+    agent._trace_intent.assert_called_once_with("expand_unconfirmed", x=42, y=40)
+
+
+def test_observed_command_center_order_does_not_blacklist_the_site():
+    from bots.mizuki.bot import Contact
+
+    site = point(42, 40)
+    agent = SimpleNamespace(
+        time=128,
+        townhalls=[],
+        _expansion_intent=Contact(site, 109),
+        _blocked_expansions={},
+    )
+    assert CompetitiveBot._expansion_pending(agent, True)
+    assert agent._expansion_intent is None and not agent._blocked_expansions
+
+
+def test_high_gas_does_not_allow_stock_worker_allocator_to_refill_refinery():
+    agent = SimpleNamespace(
+        time=330,
+        minerals=40,
+        vespene=532,
+        distribute_workers=AsyncMock(),
+        _distribute_minerals_only=Mock(),
+    )
+    asyncio.run(CompetitiveBot._distribute_economy(agent))
+    agent._distribute_minerals_only.assert_called_once()
+    agent.distribute_workers.assert_not_awaited()
+    agent.vespene = 80
+    asyncio.run(CompetitiveBot._distribute_economy(agent))
+    agent.distribute_workers.assert_awaited_once()
+
+
+def test_high_gas_mineral_allocator_moves_overflow_to_new_base_without_refilling_gas():
+    base_a = SimpleNamespace(
+        tag=7, is_flying=False, surplus_harvesters=1, distance_to=lambda _: 2
+    )
+    base_b = SimpleNamespace(
+        tag=8, is_flying=False, surplus_harvesters=-2, distance_to=lambda _: 12
+    )
+    first = SimpleNamespace(tag=30, mineral_contents=700, distance_to=lambda _: 3)
+    second = SimpleNamespace(tag=31, mineral_contents=900, distance_to=lambda _: 3)
+    minerals = {7: [first], 8: [second]}
+    overflow = SimpleNamespace(
+        tag=1,
+        is_idle=False,
+        order_target=30,
+        is_carrying_resource=False,
+        gather=Mock(return_value=True),
+    )
+    idle = SimpleNamespace(
+        tag=2,
+        is_idle=True,
+        order_target=None,
+        is_carrying_resource=False,
+        gather=Mock(return_value=True),
+    )
+    gas = SimpleNamespace(
+        tag=3, is_idle=False, order_target=77, is_carrying_resource=False, gather=Mock()
+    )
+    agent = SimpleNamespace(
+        townhalls=SimpleNamespace(ready=[base_a, base_b]),
+        workers=[overflow, idle, gas],
+        mineral_field=SimpleNamespace(closer_than=lambda _, base: minerals[base.tag]),
+        unit_tags_received_action=set(),
+    )
+    CompetitiveBot._distribute_minerals_only(agent)
+    overflow.gather.assert_called_once_with(second)
+    idle.gather.assert_called_once_with(second)
+    gas.gather.assert_not_called()

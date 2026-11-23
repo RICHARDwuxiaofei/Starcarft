@@ -22,6 +22,7 @@ from .policy import (
     expansion_allowed,
     protect_natural,
     supply_order_count,
+    surplus_gas,
 )
 from .trace import DecisionTrace
 
@@ -86,6 +87,7 @@ class CompetitiveBot(BotAI):
         self._reserved_addons: dict[Point2, float] = {}
         self._next_refinery_staff = 0.0
         self._natural_retry_at = 0.0
+        self._expansion_intent: Contact | None = None
         self._support_retry_at = 0.0
         self._last_macro_mode: str | None = None
         self._scout_retreat_until = 0.0
@@ -153,9 +155,7 @@ class CompetitiveBot(BotAI):
         state = self._signals(contacts, structures)
 
         if iteration % 12 == 0:
-            await self.distribute_workers(
-                resource_ratio=2.4 if self.time < 230 else 1.8
-            )
+            await self._distribute_economy()
         if iteration % 5 == 0:
             self._scout(contacts)
             self._orbitals(contacts, state)
@@ -444,12 +444,81 @@ class CompetitiveBot(BotAI):
     def _available_builder(self, position: Point2) -> Unit | None:
         return next(iter(CompetitiveBot._candidate_builders(self, position)), None)
 
+    async def _distribute_economy(self) -> None:
+        if not surplus_gas(self.minerals, self.vespene):
+            await self.distribute_workers(
+                resource_ratio=2.4 if self.time < 230 else 1.8
+            )
+            return
+        # The stock allocator can fill gas deficits despite its resource_ratio
+        # argument. Keep that allocator out of the high-gas branch entirely.
+        self._distribute_minerals_only()
+
+    def _distribute_minerals_only(self) -> None:
+        fields = []
+        for hall in sorted(self.townhalls.ready, key=lambda h: h.tag):
+            if hall.is_flying:
+                continue
+            patches = [
+                m
+                for m in self.mineral_field.closer_than(9, hall)
+                if m.mineral_contents > 0
+            ]
+            if patches:
+                fields.append((hall, patches))
+        if not fields:
+            return
+
+        idle = [
+            w
+            for w in self.workers
+            if w.is_idle
+            and not w.is_carrying_resource
+            and w.tag not in self.unit_tags_received_action
+        ]
+        overflow = []
+        for hall, patches in fields:
+            if hall.surplus_harvesters <= 0:
+                continue
+            patch_tags = {m.tag for m in patches}
+            excess = [
+                w
+                for w in self.workers
+                if not w.is_idle
+                and w.order_target in patch_tags
+                and not w.is_carrying_resource
+                and w.tag not in self.unit_tags_received_action
+            ]
+            excess.sort(key=lambda w: w.tag)
+            overflow.extend(excess[: hall.surplus_harvesters])
+        vacancies = {h.tag: max(0, -h.surplus_harvesters) for h, _ in fields}
+        targets: dict[int, int] = {}
+        for w in self.workers:
+            target = w.order_target
+            if isinstance(target, int):
+                targets[target] = targets.get(target, 0) + 1
+        for w in sorted(idle, key=lambda u: u.tag) + overflow:
+            if w.tag in self.unit_tags_received_action:
+                continue
+            free_fields = [(h, p) for h, p in fields if vacancies[h.tag] > 0]
+            if not free_fields and not w.is_idle:
+                break
+            hall, patches = min(
+                free_fields or fields, key=lambda hp: (hp[0].distance_to(w), hp[0].tag)
+            )
+            patch = min(
+                patches, key=lambda m: (targets.get(m.tag, 0), m.distance_to(w), m.tag)
+            )
+            if w.gather(patch):
+                vacancies[hall.tag] -= 1
+                targets[patch.tag] = targets.get(patch.tag, 0) + 1
+
     def _staff_refineries(self) -> None:
         if self.time < self._next_refinery_staff:
             return
         self._next_refinery_staff = self.time + 5
         gas_tags = self.gas_buildings.tags
-        if self.vespene >= 225 and self.vespene > self.minerals * 0.9:
+        if surplus_gas(self.minerals, self.vespene):
             gassers = [
                 w
                 for w in self.workers
@@ -593,7 +662,9 @@ class CompetitiveBot(BotAI):
             self._pending(U.SUPPLYDEPOT),
             producers,
         )
-        pending_cc = bool(self._pending(U.COMMANDCENTER))
+        pending_cc = CompetitiveBot._expansion_pending(
+            self, bool(self._pending(U.COMMANDCENTER))
+        )
         # A lost main can be rebuilt even if its replacement has no supporting barracks.
         recovering = s.bases == 0 and not pending_cc
         bank_natural = protect_natural(
@@ -725,6 +796,26 @@ class CompetitiveBot(BotAI):
         if s.local_pressure < 3 and self.time > 125:
             self._repair(townhalls)
 
+    def _expansion_pending(self, observed_order: bool) -> bool:
+        intent = getattr(self, "_expansion_intent", None)
+        if intent is None:
+            return observed_order
+        if observed_order or any(
+            h.distance_to(intent.position) < 3 for h in self.townhalls
+        ):
+            self._expansion_intent = None
+            return observed_order
+        if self.time - intent.stamp < 3:
+            return True
+        # Queue acceptance is local; an absent order/foundation across several
+        # observations must not make us retry the same invalid tile forever.
+        self._blocked_expansions[intent.position] = self.time + 18
+        self._expansion_intent = None
+        self._trace_intent(
+            "expand_unconfirmed", x=intent.position.x, y=intent.position.y
+        )
+        return False
+
     async def _expand(self, halls: list[Unit]) -> bool:
         occupied = [h.position for h in self.townhalls]
         origin = halls[0].position if halls else self.start_location
@@ -755,6 +846,7 @@ class CompetitiveBot(BotAI):
                 if distance is None and worker.distance_to(location) > 2.5:
                     continue
                 if worker.build(U.COMMANDCENTER, location, can_afford_check=True):
+                    self._expansion_intent = Contact(location, self.time)
                     if getattr(self, "_trace", None) is not None:
                         self._trace_intent(
                             "expand_queued",

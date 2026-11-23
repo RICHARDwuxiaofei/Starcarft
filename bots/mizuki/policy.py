@@ -74,3 +74,8 @@ def desired_refineries(active_bases: int, gas_bank: int, *, factory_ready: bool)
     if active_bases < 2 or not factory_ready or gas_bank >= 185:
         return 1
     return min(6, 2 if active_bases == 2 else 2 * active_bases - 2)
+
+
+def surplus_gas(minerals: float, gas: float) -> bool:
+    """Share the same gas safety valve across all worker allocation paths."""
+    return gas >= 225 and gas > minerals * 0.9

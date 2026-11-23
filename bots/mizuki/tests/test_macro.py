@@ -107,7 +107,7 @@ def test_frame_dispatch_only_directs_visible_units(monkeypatch):
         enemy_structures=[snapshot],
         time=0,
         _signals=Mock(return_value=signals),
-        distribute_workers=AsyncMock(),
+        _distribute_economy=AsyncMock(),
         _scout=Mock(),
         _orbitals=Mock(),
         _depot_control=Mock(),
