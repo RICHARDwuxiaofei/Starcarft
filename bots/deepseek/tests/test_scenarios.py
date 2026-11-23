@@ -194,11 +194,9 @@ def test_defense_detects_enemy_near_base_and_recalls_attack():
     world = FakeBotWorld(module)
     world.bot.attack_state = "ATTACK"
     world.bot._army_supply = lambda: 10.0
+    # 骚扰级（2 人口）不再召回主力；这里用 8 人口的正面推进验证回防路径。
     world.enemy_units = FakeUnits(
-        [
-            FakeUnit(UnitTypeId.ZERGLING, (52, 50)),
-            FakeUnit(UnitTypeId.ZERGLING, (53, 50)),
-        ]
+        [FakeUnit(UnitTypeId.ZERGLING, (52 + i, 50)) for i in range(8)]
     )
     world.bot.enemy_units = world.enemy_units
     world.time_seconds = 400
@@ -228,13 +226,21 @@ def test_attack_waits_for_army_and_medivac():
 def test_attack_does_not_launch_without_medivac_before_540():
     assert (
         module.attack_ready(
-            army_supply=40, medivacs=0, time=400, enemy_army_supply=5, threat_level=0
+            army_supply=40,
+            medivacs=0,
+            time=400,
+            enemy_army_supply=5,
+            threat_blocking=False,
         )
         is False
     )
     assert (
         module.attack_ready(
-            army_supply=40, medivacs=1, time=400, enemy_army_supply=5, threat_level=0
+            army_supply=40,
+            medivacs=1,
+            time=400,
+            enemy_army_supply=5,
+            threat_blocking=False,
         )
         is True
     )
@@ -243,13 +249,21 @@ def test_attack_does_not_launch_without_medivac_before_540():
 def test_attack_is_cancelled_when_outnumbered_or_threatened():
     assert (
         module.attack_ready(
-            army_supply=30, medivacs=2, time=500, enemy_army_supply=45, threat_level=0
+            army_supply=30,
+            medivacs=2,
+            time=500,
+            enemy_army_supply=45,
+            threat_blocking=False,
         )
         is False
     )
     assert (
         module.attack_ready(
-            army_supply=40, medivacs=2, time=500, enemy_army_supply=5, threat_level=2
+            army_supply=40,
+            medivacs=2,
+            time=500,
+            enemy_army_supply=5,
+            threat_blocking=True,
         )
         is False
     )
@@ -359,12 +373,7 @@ def test_midgame_on_step_runs_full_pipeline_offline():
 def test_midgame_on_step_defends_against_natural_push():
     world = _build_midgame_world()
     world.enemy_units = FakeUnits(
-        [
-            FakeUnit(UnitTypeId.MARINE, (64, 52)),
-            FakeUnit(UnitTypeId.MARINE, (65, 52)),
-            FakeUnit(UnitTypeId.MARAUDER, (66, 52)),
-            FakeUnit(UnitTypeId.SIEGETANK, (67, 52)),
-        ]
+        [FakeUnit(UnitTypeId.MARINE, (64 + i * 0.5, 52)) for i in range(10)]
     )
     world.bot.enemy_units = world.enemy_units
     world.bot._natural = Point2((62, 50))
@@ -528,3 +537,221 @@ def test_long_run_keeps_command_rate_bounded_and_stable():
     average = world.bot._commands_total / max(1, world.bot._steps_seen)
     assert average <= 60, f"平均每帧指令过多: {average:.1f}"
     assert world.bot._duplicates_skipped >= 0
+
+
+# ---------------------------------------------------------------------------
+# 本轮复盘驱动：骚扰不再拦阻推进 / 开局建筑静默失败
+# ---------------------------------------------------------------------------
+
+
+def test_threat_blocks_attack_thresholds():
+    # 单个死神 / 机枪兵绕后骚扰：不拦。
+    assert module.threat_blocks_attack(1, 1, 40) is False
+    assert module.threat_blocks_attack(4, 3, 40) is False
+    # 一支能吃掉分矿的部队：拦。
+    assert module.threat_blocks_attack(8, 4, 40) is True
+    # 数量多而家里没兵：拦。
+    assert module.threat_blocks_attack(5, 5, 10) is True
+    # 数量多但家里有兵：不拦，交给守军。
+    assert module.threat_blocks_attack(5, 5, 30) is False
+
+
+def test_harass_does_not_recall_the_army():
+    world = FakeBotWorld(module)
+    world.bot.attack_state = "ATTACK"
+    world.bot._army_supply = lambda: 30.0
+    world.bot.calculate_supply_cost = lambda unit_type: 1.0
+    world.bot._natural = Point2((62, 50))
+    world.enemy_units = FakeUnits([FakeUnit(UnitTypeId.REAPER, (58, 52))])
+    world.bot.enemy_units = world.enemy_units
+    world.time_seconds = 400
+
+    world.run(world.bot._manage_defense())
+
+    assert world.bot._threat_level == 1
+    assert world.bot._threat_blocking is False
+    # 关键：不再续期防守、不再强制回家。
+    assert world.bot._defense_until == 0
+    assert world.bot.attack_state == "ATTACK"
+
+
+def test_push_still_recalls_the_army():
+    world = FakeBotWorld(module)
+    world.bot.attack_state = "ATTACK"
+    world.bot._army_supply = lambda: 30.0
+    world.bot.calculate_supply_cost = lambda unit_type: 1.0
+    world.bot._natural = Point2((62, 50))
+    world.enemy_units = FakeUnits(
+        [FakeUnit(UnitTypeId.MARINE, (60 + i, 52)) for i in range(10)]
+    )
+    world.bot.enemy_units = world.enemy_units
+    world.time_seconds = 400
+
+    world.run(world.bot._manage_defense())
+
+    assert world.bot._threat_blocking is True
+    assert world.bot._defense_until > 400
+    assert world.bot.attack_state == "GATHER"
+
+
+def test_army_leaves_home_while_enemy_harasses():
+    world = FakeBotWorld(module)
+    world.bot.calculate_supply_cost = lambda unit_type: 2.0
+    world.time_seconds = 420
+    world.bot._prev_step_time = 400
+    for index in range(10):
+        world.add_unit(UnitTypeId.MARINE, (60 + index, 60), is_idle=False)
+    world.add_unit(UnitTypeId.MEDIVAC, (60, 61), is_idle=False)
+    world.enemy_units = FakeUnits([FakeUnit(UnitTypeId.REAPER, (58, 52))])
+    world.bot.enemy_units = world.enemy_units
+
+    world.run(world.bot._manage_defense())
+    world.bot._manage_army()
+
+    assert world.bot.attack_state == "ATTACK"
+    assert world.bot._first_attack_at == 420
+
+    world.time_seconds = 430
+    world.bot._manage_army()
+    assert world.bot._attack_seconds == pytest.approx(10, abs=0.5)
+
+
+def test_retreat_holds_army_for_regroup_before_attacking_again():
+    world = FakeBotWorld(module)
+    world.bot.calculate_supply_cost = lambda unit_type: 2.0
+    world.bot.attack_state = "RETREAT"
+    world.bot._retreat_at = 500
+    world.time_seconds = 505
+    for index in range(10):
+        world.add_unit(UnitTypeId.MARINE, (60 + index, 60), is_idle=False)
+    world.add_unit(UnitTypeId.MEDIVAC, (60, 61), is_idle=False)
+
+    world.bot._manage_army()
+    assert world.bot.attack_state == "GATHER"
+
+    # 20 秒重整期内不再出门，避免 ATTACK/RETREAT 反复横跳。
+    world.bot._manage_army()
+    assert world.bot.attack_state == "GATHER"
+
+    world.time_seconds = 530
+    world.bot._manage_army()
+    assert world.bot.attack_state == "ATTACK"
+
+
+def test_opening_reissues_barracks_when_structure_never_appeared():
+    world = FakeBotWorld(module)
+    world.bot.supply_used = 19
+    world.bot.minerals = 400
+    world.bot._open_depot1 = True
+    world.add_structure(UnitTypeId.SUPPLYDEPOT, (48, 50))
+    world.bot._open_rax = True
+    world.bot._open_rax_at = 100
+    world.time_seconds = 130
+
+    world.run(world.bot._manage_opening())
+
+    # 标记被重置并重新下单，而不是整局以为兵营已经建好。
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+    assert world.builds[0][1]["random_alternative"] is True
+
+
+def test_opening_reissues_barracks_when_construction_stuck_at_zero():
+    world = FakeBotWorld(module)
+    world.bot.supply_used = 19
+    world.bot.minerals = 400
+    world.bot._open_depot1 = True
+    world.add_structure(UnitTypeId.SUPPLYDEPOT, (48, 50))
+    world.bot._open_rax = True
+    world.bot._open_rax_at = 100
+    world.add_structure(
+        UnitTypeId.BARRACKS, (44, 44), is_ready=False, build_progress=0.0
+    )
+    world.time_seconds = 140
+
+    world.run(world.bot._manage_opening())
+
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+
+
+def test_opening_keeps_barracks_flag_when_construction_is_progressing():
+    world = FakeBotWorld(module)
+    world.bot.supply_used = 19
+    world.bot.minerals = 400
+    world.bot._open_depot1 = True
+    world.add_structure(UnitTypeId.SUPPLYDEPOT, (48, 50))
+    world.bot._open_rax = True
+    world.bot._open_rax_at = 100
+    world.add_structure(
+        UnitTypeId.BARRACKS, (44, 44), is_ready=False, build_progress=0.4
+    )
+    world.time_seconds = 140
+
+    world.run(world.bot._manage_opening())
+
+    assert world.builds == []
+    assert world.bot._open_rax is True
+
+
+def test_structure_manager_ignores_zero_progress_barracks():
+    world = FakeBotWorld(module)
+    world.bot.minerals = 400
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.add_structure(
+        UnitTypeId.BARRACKS, (44, 44), is_ready=False, build_progress=0.0
+    )
+    world.time_seconds = 200
+
+    world.run(world.bot._manage_structures())
+
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+
+
+def test_structures_build_barracks_even_under_push_when_none_ready():
+    world = FakeBotWorld(module)
+    world.bot.minerals = 400
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot._threat_blocking = True
+    world.time_seconds = 400
+
+    world.run(world.bot._manage_structures())
+
+    # 越挨打越要出兵营，不能因为威胁就把生产建筑停掉。
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+
+
+def test_army_resumes_attack_after_push_retreats():
+    """正面推进撤走后，主力要能重新出门，而不是被防守状态永久锁住。"""
+    world = FakeBotWorld(module)
+    world.bot.calculate_supply_cost = lambda unit_type: 2.0
+    world.bot._natural = Point2((62, 50))
+    for index in range(10):
+        world.add_unit(UnitTypeId.MARINE, (60 + index, 60), is_idle=False)
+    world.add_unit(UnitTypeId.MEDIVAC, (60, 61), is_idle=False)
+    world.time_seconds = 420
+    world.bot._prev_step_time = 415
+
+    world.run(world.bot._manage_defense())
+    world.bot._manage_army()
+    assert world.bot.attack_state == "ATTACK"
+
+    # 正面推进到家：全军回防。
+    world.time_seconds = 430
+    world.enemy_units = FakeUnits(
+        [FakeUnit(UnitTypeId.MARINE, (60 + i, 52)) for i in range(10)]
+    )
+    world.bot.enemy_units = world.enemy_units
+    world.run(world.bot._manage_defense())
+    world.bot._manage_army()
+    assert world.bot.attack_state == "GATHER"
+    assert world.bot._defense_until == pytest.approx(438)
+
+    # 推进撤走：防守窗口结束（不续期）后恢复推进。
+    world.time_seconds = 445
+    world.enemy_units = FakeUnits([])
+    world.bot.enemy_units = world.enemy_units
+    world.run(world.bot._manage_defense())
+    world.bot._manage_army()
+    assert world.bot.attack_state == "ATTACK"
+    assert world.bot._defense_until == pytest.approx(438)

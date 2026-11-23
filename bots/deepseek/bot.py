@@ -160,22 +160,44 @@ def choose_expansion_index(
     return best_index
 
 
+def threat_blocks_attack(
+    threat_supply: float,
+    enemy_units_near: int,
+    own_army_supply: float,
+) -> bool:
+    """这次的家门口威胁是否足以拦下主力。
+
+    以前只要 `threat_level > 0`（任何一个能攻击的敌人在基地 30 格内）就全场回防
+    并续期 `_defense_until`，等价于：对手一个死神绕后，就能把主力永久钉在家里。
+    三场录像都出现 8–10 分钟的击杀空窗（deepseek-vs-antigravity 4:56–15:21、
+    vs-codex 4:00–7:25 与 16:41–20:42）；击杀空窗只能定位区间，但结合
+    “任何一个单位都触发全场回防”的实现，这是最可能的解释。
+
+    只有“能在正面吃我分矿的兵力”才算拦阻；零星骚扰交给地堡、农民躲避和
+    家里的残余守军处理，主力继续按计划推进。
+    """
+    if threat_supply >= 8:
+        return True
+    # 数量多但单兵价值低（如小狗群）时，只有家里没兵才需要回防。
+    return enemy_units_near >= 5 and own_army_supply < 15
+
+
 def attack_ready(
     army_supply: float,
     medivacs: int,
     time: float,
     enemy_army_supply: float,
-    threat_level: int,
+    threat_blocking: bool,
 ) -> bool:
     """是否已经具备主动推进的条件。
 
-    * 家里被打时不出门；
+    * 家里正在被正面推进时不出门（零星骚扰不再拦路）；
     * 300 秒前不主动进攻（保留运营窗口）；
     * 至少 26 人口部队，对手明显虚弱时放宽到 20；
     * 540 秒前至少带 1 架医疗运输机，之后可以先行；
     * 敌方兵力显著高于我方时不送。
     """
-    if threat_level > 0 or time < 300:
+    if threat_blocking or time < 300:
         return False
     needed = 20 if enemy_army_supply < 10 else 26
     if army_supply < needed:
@@ -310,6 +332,9 @@ class CompetitiveBot(BotAI):
         self._enemy_army_supply: float = 0.0
         self._threat_level: int = 0
         self._threat_supply: float = 0.0
+        self._threat_units: int = 0
+        self._threat_blocking: bool = False
+        self._last_harass_log: float = -999.0
         self._threat_position: Point2 | None = None
         self._economy_emergency_until: float = 0.0
         # 开局建造序列的完成标记（单兵营双开）。
@@ -319,6 +344,17 @@ class CompetitiveBot(BotAI):
         self._open_gas: bool = False
         self._open_depot2: bool = False
         self._open_cc: bool = False
+        # 开局每一步的下单时刻：用来发现“下了单却没建成”的静默失败。
+        self._open_depot1_at: float = -999.0
+        self._open_rax_at: float = -999.0
+        self._open_gas_at: float = -999.0
+        # 上一次放置疑似落在不可达/被占位置时，改用随机候选点重试。
+        self._open_alt_placement: bool = False
+        # 推进统计：首次推进时间与累计处于进攻态的时间，作为下一场的量化指标。
+        self._first_attack_at: float | None = None
+        self._attack_seconds: float = 0.0
+        self._retreat_at: float = -999.0
+        self._prev_step_time: float = 0.0
 
     async def on_start(self) -> None:
         # 不覆盖对局脚本设置的推进步长：同一局两个客户端要用同一节奏推帧。
@@ -418,6 +454,46 @@ class CompetitiveBot(BotAI):
 
     # ---- 开局建造序列 -----------------------------------------------------
 
+    def _verify_opening_builds(self) -> None:
+        """校验开局每一步是否"真的建起来"，而不是只看下单成功。
+
+        证据（deepseek-vs-codex 复盘资源样本）：1:23–3:45 人口上限一直是 31
+        = 指挥中心 15 + 两座补给站 8+8，没有兵营的 15；同期矿从 1140 堆到 1695、
+        兵力始终为 0，而 minerals_lost 一直为 0（说明不是被拆掉，是压根没建成）。
+        按开局代码顺序（兵营 → 气矿 → 二补给 → 分矿），气矿与二补给都已完成，
+        说明兵营这一步的标记早已置位。也就是说：`build()` 返回建筑只代表指令被
+        接受，SCV 若被击杀或落点走不到，建筑会永远停在 0% 或根本不出现，而标记
+        已经置位，整个开局静默瘫痪。这里用“是否存在 / 是否有施工进度”复核，
+        超时就重置该步骤并换用随机候选位置重试。
+        """
+        if self._open_rax and self._open_rax_at > 0:
+            elapsed = self.time - self._open_rax_at
+            rax = self.structures(UnitTypeId.BARRACKS)
+            if rax.amount == 0 and elapsed > 15:
+                logger.warning(
+                    "[DeepSeek] 兵营下单 %.0f 秒后仍不存在，换位置重新下单", elapsed
+                )
+                self._open_rax = False
+                self._open_alt_placement = True
+            elif rax.amount > 0 and rax.ready.amount == 0:
+                progress = max(building.build_progress for building in rax)
+                if progress <= 0.01 and elapsed > 25:
+                    logger.warning(
+                        "[DeepSeek] 兵营 %.0f 秒无施工进度（SCV 可能走不到），换位置重建",
+                        elapsed,
+                    )
+                    self._open_rax = False
+                    self._open_alt_placement = True
+
+        if (
+            self._open_gas
+            and self._open_gas_at > 0
+            and self.structures(UnitTypeId.REFINERY).amount == 0
+            and self.time - self._open_gas_at > 20
+        ):
+            logger.warning("[DeepSeek] 气矿下单后未开工，重新尝试")
+            self._open_gas = False
+
     async def _manage_opening(self) -> bool:
         """单兵营双开：14 人口 -> 兵营 -> 气矿 -> 二人口 -> 自然分矿。
 
@@ -430,6 +506,7 @@ class CompetitiveBot(BotAI):
         if self.time - self._last_open_build_try < 1.0:
             return True
 
+        self._verify_opening_builds()
         anchor = self._main_base().position
         # 开局补给站被拆会导致人口卡死，发现后重新走一次补给站步骤。
         if (
@@ -444,6 +521,7 @@ class CompetitiveBot(BotAI):
             if self.supply_used < 13 or self.minerals < 100:
                 return True
             self._last_open_build_try = self.time
+            self._open_depot1_at = self.time
             if await self.build(
                 UnitTypeId.SUPPLYDEPOT,
                 near=anchor,
@@ -458,13 +536,17 @@ class CompetitiveBot(BotAI):
             if self.supply_used < 15 or self.minerals < 150:
                 return True
             self._last_open_build_try = self.time
+            self._open_rax_at = self.time
             if await self.build(
                 UnitTypeId.BARRACKS,
                 near=anchor,
-                max_distance=10,
-                random_alternative=False,
+                max_distance=14 if self._open_alt_placement else 10,
+                random_alternative=self._open_alt_placement,
             ):
                 self._open_rax = True
+                if self._open_alt_placement:
+                    logger.info("[DeepSeek] 兵营改用随机候选位置重建")
+                    self._open_alt_placement = False
             return True
 
         # 3) 气矿，为科技实验室与兴奋剂做准备。
@@ -473,6 +555,7 @@ class CompetitiveBot(BotAI):
                 geyser = self._available_geyser()
                 if geyser is not None:
                     self._last_open_build_try = self.time
+                    self._open_gas_at = self.time
                 if geyser is not None and await self.build(
                     UnitTypeId.REFINERY, near=geyser
                 ):
@@ -758,8 +841,8 @@ class CompetitiveBot(BotAI):
         for cc in self.townhalls(UnitTypeId.COMMANDCENTER).ready:
             if self.time < 240 or self.minerals < 150:
                 continue
-            self._issue(cc, cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND), 2.0)
-            logger.info("[DeepSeek] 升级轨道指挥中心")
+            if self._issue(cc, cc(AbilityId.UPGRADETOORBITAL_ORBITALCOMMAND), 2.0):
+                logger.info("[DeepSeek] 升级轨道指挥中心")
             return
 
         # 矿骡：每个轨道中心能量满 50 就投放，优先保证经济。
@@ -798,13 +881,27 @@ class CompetitiveBot(BotAI):
             UnitTypeId.ARMORY: armories,
         }
 
+    def _usable_structures(self, unit_type: UnitTypeId) -> int:
+        """只统计“已完工或真的在施工”的建筑。
+
+        进度停在 0 的建筑（SCV 被击杀、落点走不到）不算数，否则它会永久占住
+        配额，让 Bot 以为兵营/工厂已经建好，从此不再补建。
+        """
+        count = 0
+        for structure in self.structures(unit_type):
+            if structure.is_ready or structure.build_progress > 0.01:
+                count += 1
+        return count
+
     async def _manage_structures(self) -> None:
         """按时间目标补生产/科技建筑；资源紧张或挨打时降低优先级。"""
         if not self.townhalls:
             return
         if self._economy_emergency_until > self.time:
             return
-        if self._threat_level > 0:
+        # 家里被正面推进时不抽农民出去盖楼；但一座能出兵的兵营都没有时必须补，
+        # 否则越挨打越没兵，会直接锁死在中后期被打崩的循环里。
+        if self._threat_blocking and self.structures(UnitTypeId.BARRACKS).ready.amount:
             return
         # 新建筑之间留 5 秒间隔，避免一次拉走太多农民。
         if self.time - self._last_structure_build < 5:
@@ -822,8 +919,9 @@ class CompetitiveBot(BotAI):
             target = targets[unit_type]
             if target <= 0:
                 continue
-            # structures() 已包含在建建筑，不能再叠加 already_pending，否则会少建。
-            have = self.structures(unit_type).amount
+            # structures() 已包含在建建筑，不能再叠加 already_pending，否则会少建；
+            # 但 0% 进度、长期不动的建筑要当作不存在，避免永久占配额。
+            have = self._usable_structures(unit_type)
             if have >= target:
                 continue
             if self.minerals < 200 and unit_type != UnitTypeId.BARRACKS:
@@ -987,10 +1085,14 @@ class CompetitiveBot(BotAI):
         if self.supply_left <= 0:
             return
         # 分矿还没开工时，优先攒 400 矿，不提前把资源变成兵。
-        if self._threat_level == 0 and not self._open_cc:
+        if not self._threat_blocking and not self._open_cc:
             return
         # 还缺基地且钱不够时先攒钱；威胁当前时允许花钱防守。
-        if self._threat_level == 0 and self._expansion_wanted() and self.minerals < 450:
+        if (
+            not self._threat_blocking
+            and self._expansion_wanted()
+            and self.minerals < 450
+        ):
             return
 
         marines = self.units(UnitTypeId.MARINE).amount
@@ -1055,7 +1157,7 @@ class CompetitiveBot(BotAI):
             return
         if self.time - self._last_expand < 25:
             return
-        if self._threat_level > 0:
+        if self._threat_blocking:
             return
 
         desired = desired_base_count(
@@ -1063,7 +1165,7 @@ class CompetitiveBot(BotAI):
             self.workers.amount,
             self._army_supply(),
             len(self.townhalls),
-            self._threat_level,
+            2 if self._threat_blocking else 0,
         )
         # townhalls 已包含在建的指挥中心。
         if len(self.townhalls) >= desired:
@@ -1166,16 +1268,35 @@ class CompetitiveBot(BotAI):
                 threat_supply += self.calculate_supply_cost(unit.type_id)
 
         self._threat_supply = threat_supply
+        self._threat_units = len(enemy_near)
         self._threat_level = classify_threat(
             threat_supply, len(enemy_near), self._army_supply()
         )
+        # 只有“打得动我分矿”的兵力才拦下主力；零星骚扰不拦。
+        self._threat_blocking = self._threat_level > 0 and threat_blocks_attack(
+            threat_supply, len(enemy_near), self._army_supply()
+        )
         if self._threat_level > 0:
-            self._defense_until = self.time + 8
             closest = min(enemy_near, key=lambda u: u.distance_to(self._home_point()))
-            self._threat_position = closest.position
-            if self.attack_state == "ATTACK":
-                logger.warning("[DeepSeek] 家中遇袭，主力回防")
-                self.attack_state = "GATHER"
+            if self._threat_blocking:
+                self._defense_until = self.time + 8
+                self._threat_position = closest.position
+                if self.attack_state == "ATTACK":
+                    logger.warning(
+                        "[DeepSeek] 家门口被正面推进（敌 %.0f 人口/%d 单位），主力回防",
+                        threat_supply,
+                        len(enemy_near),
+                    )
+                    self.attack_state = "GATHER"
+            elif self.time - self._last_harass_log > 10:
+                # 骚扰级威胁：主力不回家，只记录，便于复盘“为什么没回防”。
+                self._last_harass_log = self.time
+                logger.info(
+                    "[DeepSeek] 骚扰未拦阻推进：敌 %.0f 人口/%d 单位 位置=%s",
+                    threat_supply,
+                    len(enemy_near),
+                    closest.position,
+                )
 
         if self._threat_level == 0:
             return
@@ -1264,7 +1385,7 @@ class CompetitiveBot(BotAI):
             self.workers.amount,
             self._army_supply(),
             len(self.townhalls),
-            self._threat_level,
+            2 if self._threat_blocking else 0,
         )
         return len(self.townhalls) < desired
 
@@ -1277,6 +1398,12 @@ class CompetitiveBot(BotAI):
     def _manage_army(self) -> None:
         army = self._army_units()
         medivacs = self.units(UnitTypeId.MEDIVAC)
+
+        # 统计处于进攻态的时间，作为下一场复测的量化指标（推进占比）。
+        step_dt = max(0.0, self.time - self._prev_step_time)
+        self._prev_step_time = self.time
+        if self.attack_state == "ATTACK":
+            self._attack_seconds += step_dt
 
         # 防守优先：把部队拉向威胁点。
         if self.time < self._defense_until:
@@ -1298,19 +1425,23 @@ class CompetitiveBot(BotAI):
             self._rally(army)
             self._manage_medivacs(medivacs, self._home_point())
             self._manage_tanks(army, self._home_point(), defending=True)
-            if attack_ready(
+            # 撤退后给 20 秒重整时间，避免在 ATTACK / RETREAT 之间来回横跳。
+            if self.time - self._retreat_at >= 20 and attack_ready(
                 self._army_supply(),
                 medivacs.amount,
                 self.time,
                 self._enemy_army_supply,
-                self._threat_level,
+                self._threat_blocking,
             ):
                 self.attack_state = "ATTACK"
                 self._attack_started_at = self.time
+                if self._first_attack_at is None:
+                    self._first_attack_at = self.time
                 logger.info(
-                    "[DeepSeek] 主动推进：兵力=%.1f 人口，运输机=%d",
+                    "[DeepSeek] 主动推进：兵力=%.1f 人口，运输机=%d，家门口威胁=%.0f",
                     self._army_supply(),
                     medivacs.amount,
+                    self._threat_supply,
                 )
             return
 
@@ -1326,7 +1457,13 @@ class CompetitiveBot(BotAI):
             self.time - self._attack_started_at,
         ):
             self.attack_state = "RETREAT"
-            logger.warning("[DeepSeek] 推进受阻，撤退重整")
+            self._retreat_at = self.time
+            logger.warning(
+                "[DeepSeek] 推进受阻，撤退重整：兵力=%.1f 敌兵=%.1f 敌近处=%d",
+                self._army_supply(),
+                self._enemy_army_supply,
+                enemies_near.amount,
+            )
             return
         self._push(army, target)
         self._prune_cleared_target(army, target)
@@ -1476,9 +1613,16 @@ class CompetitiveBot(BotAI):
         self._last_log = self.time
         self._order_memo.clear()
         steps = max(1, self._steps_seen)
+        if self._first_attack_at is None:
+            first_attack = "无"
+        else:
+            seconds = int(self._first_attack_at)
+            first_attack = f"{seconds // 60}:{seconds % 60:02d}"
+        attack_ratio = 100.0 * self._attack_seconds / max(1.0, self.time)
         logger.info(
             "[DeepSeek] %s 农民=%d 基地=%d 人口=%.0f/%.0f 矿=%d 气=%d "
-            "部队=%.1f 敌兵=%.1f 状态=%s 指令=%.2f/帧(峰值%d, 去重%d) 步长=%s",
+            "部队=%.1f 敌兵=%.1f 状态=%s 兵营=%d 威胁=%.0f/%d 拦阻=%s "
+            "首推=%s 进攻占比=%.0f%% 指令=%.2f/帧(峰值%d, 去重%d) 步长=%s",
             self.time_formatted,
             self.workers.amount,
             len(self.townhalls),
@@ -1489,6 +1633,12 @@ class CompetitiveBot(BotAI):
             self._army_supply(),
             self._enemy_army_supply,
             self.attack_state,
+            self.structures(UnitTypeId.BARRACKS).ready.amount,
+            self._threat_supply,
+            self._threat_units,
+            "是" if self._threat_blocking else "否",
+            first_attack,
+            attack_ratio,
             self._commands_total / steps,
             self._commands_peak,
             self._duplicates_skipped,

@@ -62,6 +62,7 @@ class FakeUnit:
         energy: float = 0,
         cargo_used: int = 0,
         add_on_tag: int = 0,
+        build_progress: float = -1.0,
     ):
         self.type_id = type_id
         self.position = Point2(position)
@@ -77,6 +78,10 @@ class FakeUnit:
         self.energy = energy
         self.cargo_used = cargo_used
         self.add_on_tag = add_on_tag
+        # 默认与 is_ready 一致；需要模拟“在建/卡住”时显式传入。
+        self.build_progress = 1.0 if is_ready else 0.0
+        if build_progress >= 0:
+            self.build_progress = build_progress
         self.order_target = None
 
     def distance_to(self, other) -> float:
