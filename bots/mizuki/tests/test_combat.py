@@ -215,3 +215,102 @@ def test_visible_storm_preempts_attacking_and_splits_the_pair():
     assert first.actions[0][0] == second.actions[0][0] == "move"
     assert first.actions[0][1] != second.actions[0][1]
     assert all(u.actions[0][1].distance_to(u.position) >= 2.25 for u in (first, second))
+
+
+def test_a_scattered_army_cannot_launch_based_on_global_count():
+    wings = [
+        DummyUnit(i, U.MARINE, point(26, 27) if i <= 10 else point(92, 94))
+        for i in range(1, 21)
+    ]
+    bot = dummy_bot(units=wings, now=300)
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.phase is _Phase.GATHER
+    assert bot._mizuki_combat_state.core_anchor in {point(26, 27), point(92, 94)}
+    assert wings[-1].actions[0][1].distance_to(bot.start_location) < 5
+
+
+def test_pressure_withdraws_when_distant_reinforcement_does_not_join_force():
+    at_front = [DummyUnit(i, U.MARINE, point(70, 70)) for i in range(1, 8)]
+    reserve = [
+        DummyUnit(100 + i, U.MARINE, position)
+        for i, position in enumerate(
+            [point(22, 22)] * 6 + [point(26, 90)] * 6 + [point(100, 36)] * 6
+        )
+    ]
+    opponents = [DummyUnit(300 + i, U.ROACH, point(81, 70)) for i in range(15)]
+    bot = dummy_bot(units=at_front + reserve, enemies=opponents, now=400)
+    bot._mizuki_combat_state = _CombatState(
+        phase=_Phase.PRESSURE, core_anchor=point(70, 70)
+    )
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.phase is _Phase.RETREAT
+    assert at_front[0].actions[0][0] == "move"
+    assert at_front[0].actions[0][1].distance_to(bot.start_location) < 5
+
+
+def test_infantry_that_outruns_tank_moves_back_to_screen():
+    front = [DummyUnit(i, U.MARINE, point(52, 40)) for i in range(1, 9)]
+    tank = DummyUnit(15, U.SIEGETANK, point(37, 40))
+    target = DummyUnit(
+        20, U.HATCHERY, point(85, 40), is_structure=True, can_attack_ground=False
+    )
+    bot = dummy_bot(units=[*front, tank], structures=[target], now=650)
+    asyncio.run(control_combat(bot, 0))
+    assert bot._mizuki_combat_state.phase is _Phase.PRESSURE
+    assert front[0].actions[0][0] == "move" and front[0].actions[0][1].x <= 45
+    assert tank.actions == [("attack", target.position)]
+
+
+def test_pressure_does_not_chase_out_of_range_contact_away_from_objective():
+    formation = [DummyUnit(i, U.MARINE, point(45, 45)) for i in range(1, 9)]
+    enemy = DummyUnit(50, U.ZERGLING, point(38, 45), ground_range=0.1)
+    goal = DummyUnit(
+        51, U.HATCHERY, point(70, 45), is_structure=True, can_attack_ground=False
+    )
+    bot = dummy_bot(units=formation, enemies=[enemy], structures=[goal], now=650)
+    asyncio.run(control_combat(bot, 0))
+    assert formation[0].actions == [("move", point(49, 45))]
+
+
+def test_viking_sweeps_known_lifted_building_even_with_ground_army_present():
+    marine = DummyUnit(1, U.MARINE, point(35, 35), can_attack_air=True)
+    viking = DummyUnit(
+        2,
+        U.VIKINGFIGHTER,
+        point(33, 35),
+        is_flying=True,
+        can_attack_air=True,
+        can_attack_ground=False,
+    )
+    floating = DummyUnit(
+        50,
+        U.BARRACKSFLYING,
+        point(100, 90),
+        is_flying=True,
+        is_structure=True,
+        can_attack_ground=False,
+    )
+    bot = dummy_bot(units=[marine, viking], structures=[floating], now=800)
+    bot.in_pathing_grid = lambda p: p != floating.position
+    asyncio.run(control_combat(bot, 0))
+    assert viking.actions == [("attack", floating)]
+    action, approach = marine.actions[0]
+    assert action == "attack" and approach != floating.position
+    assert approach.distance_to(floating.position) < 6
+
+
+def test_escort_does_not_immediately_return_from_anti_air_escape():
+    marine = DummyUnit(1, U.MARINE, point(51, 45), health_percentage=0.4)
+    medivac = DummyUnit(
+        2, U.MEDIVAC, point(45, 45), is_flying=True, can_attack_ground=False
+    )
+    enemy = DummyUnit(3, U.MARINE, point(49, 45), can_attack_air=True)
+    bot = dummy_bot(units=[marine, medivac], enemies=[enemy])
+    asyncio.run(control_combat(bot, 0))
+    first = medivac.actions[0]
+    assert first[0] == "move"
+    medivac.position = first[1]
+    bot.enemy_units.clear()
+    bot.time += 1
+    asyncio.run(control_combat(bot, 2))
+    assert medivac.actions == [first]

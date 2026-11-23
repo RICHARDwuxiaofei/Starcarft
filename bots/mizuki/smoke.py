@@ -12,6 +12,17 @@ from sc2.main import run_game
 from sc2.player import Bot, Computer
 
 from .bot import CompetitiveBot
+from .trace import DecisionTrace
+
+
+def _replay_stamp(path: Path | None) -> tuple[int, int, int] | None:
+    if path is None:
+        return None
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,26 +64,39 @@ def main(argv: list[str] | None = None) -> int:
         ):
             parser.error("--review-json must be a .json file distinct from the replay")
 
-    arena = maps.get(args.map)
-    players = [
-        Bot(Race.Terran, CompetitiveBot(), name="Mizuki"),
-        Computer(Race[args.race], Difficulty[args.difficulty]),
-    ]
-    outcome = run_game(
-        arena,
-        players,
-        realtime=args.realtime,
-        disable_fog=False,
-        random_seed=args.seed,
-        game_time_limit=args.seconds,
-        save_replay_as=str(args.replay) if args.replay else None,
-    )
-    if outcome is None:
-        print("No SC2 result returned.")
+    trace = DecisionTrace() if args.review_json is not None else None
+    previous = _replay_stamp(args.replay) if trace is not None else None
+    failure = None
+    try:
+        arena = maps.get(args.map)
+        players = [
+            Bot(Race.Terran, CompetitiveBot(trace=trace), name="Mizuki"),
+            Computer(Race[args.race], Difficulty[args.difficulty]),
+        ]
+        outcome = run_game(
+            arena,
+            players,
+            realtime=args.realtime,
+            disable_fog=False,
+            random_seed=args.seed,
+            game_time_limit=args.seconds,
+            save_replay_as=str(args.replay) if args.replay else None,
+        )
+    except Exception as exc:
+        if trace is None:
+            raise
+        outcome = None
+        failure = (
+            f"SC2 launcher failed ({type(exc).__name__}); no current replay analyzed."
+        )
+    if outcome is None and failure is None:
+        failure = "No SC2 result returned."
+    if failure is not None and trace is None:
+        print(failure)
         return 2
     context = {
         "bot": "mizuki",
-        "result": outcome.name,
+        "result": outcome.name if outcome is not None else None,
         "map": args.map,
         "opponent": args.race,
         "difficulty": args.difficulty,
@@ -81,12 +105,27 @@ def main(argv: list[str] | None = None) -> int:
         "realtime": args.realtime,
     }
     print(json.dumps(context))
-    if args.review_json is not None:
+    if args.review_json is not None and trace is not None:
         from .replay_review import main as review
 
-        return review(
-            [str(args.replay), "--out", str(args.review_json)], local_run=context
+        latest = _replay_stamp(args.replay)
+        if failure is None and (latest is None or latest == previous or latest[0] == 0):
+            failure = "SC2 did not write a new nonempty replay; an older replay was not reused."
+        aborted = trace.last_error is not None or (
+            context["result"] == "Defeat"
+            and not trace.start_completed
+            and trace.steps_completed == 0
         )
+        status = review(
+            [str(args.replay), "--out", str(args.review_json)],
+            local_run={
+                **context,
+                "bot_execution_incomplete": aborted,
+                "decision_trace": trace.export(),
+            },
+            skip_reason=failure,
+        )
+        return status or (2 if aborted else 0)
     return 0
 
 

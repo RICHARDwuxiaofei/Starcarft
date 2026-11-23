@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from sc2.bot_ai import BotAI
+from sc2.game_info import Ramp
 from sc2.ids.ability_id import AbilityId as A
 from sc2.ids.unit_typeid import UnitTypeId as U
 from sc2.ids.upgrade_id import UpgradeId as Up
@@ -20,6 +21,7 @@ from .policy import (
     expansion_allowed,
     supply_order_count,
 )
+from .trace import DecisionTrace
 
 WORKER_TYPES = {U.SCV, U.PROBE, U.DRONE, U.MULE}
 CLOAK_HINTS = {
@@ -73,8 +75,16 @@ def visible(units: Iterable[Unit]) -> list[Unit]:
 class CompetitiveBot(BotAI):
     """SC2 Arena entry point. Only API-visible observations inform enemy adaptation."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, trace: DecisionTrace | None = None) -> None:
         super().__init__()
+        self._trace = trace
+        self._wall_anchors: (
+            tuple[Point2 | None, Point2 | None, Point2 | None] | None
+        ) = None
+        self._reserved_addons: dict[Point2, float] = {}
+        self._next_refinery_staff = 0.0
+        self._last_macro_mode: str | None = None
+        self._scout_retreat_until = 0.0
         self._scout_tag: int | None = None
         self._scout_finished = False
         self._scout_route: list[Point2] = []
@@ -86,7 +96,8 @@ class CompetitiveBot(BotAI):
         self._armor_until = 0.0
         self._cloak_until = 0.0
         self._scan_last = -99.0
-        self._damaged_workers: dict[int, float] = {}
+        self._worker_sightings: dict[int, tuple[float, Point2]] = {}
+        self._unexplained_hits: list[Contact] = []
         self._scan_contact: Contact | None = None
 
     async def on_start(self) -> None:
@@ -103,7 +114,31 @@ class CompetitiveBot(BotAI):
                 sorted(candidates, key=lambda e: (e.distance_to(p), e.x, e.y))[:2]
             )
 
+        if self._trace is not None:
+            self._trace.start_completed = True
+
     async def on_step(self, iteration: int) -> None:
+        trace = getattr(self, "_trace", None)
+        try:
+            await CompetitiveBot._play_frame(self, iteration)
+        except Exception as error:
+            if trace is not None:
+                trace.record(
+                    self.time,
+                    "step_error",
+                    iteration=iteration,
+                    exception=type(error).__name__,
+                )
+                trace.last_error = {
+                    "t": round(self.time, 2),
+                    "iteration": iteration,
+                    "type": type(error).__name__,
+                }
+            raise
+        if trace is not None:
+            trace.steps_completed += 1
+
+    async def _play_frame(self, iteration: int) -> None:
         contacts = visible(self.enemy_units)
         structures = visible(self.enemy_structures)
         state = self._signals(contacts, structures)
@@ -119,6 +154,52 @@ class CompetitiveBot(BotAI):
         if iteration % 3 == 0:
             await self._macro(state)
         await control_combat(self, iteration)
+        trace = getattr(self, "_trace", None)
+        if trace is not None and iteration % 2 == 0:
+            self._sample_trace(trace, state)
+
+    def _sample_trace(self, trace: DecisionTrace, state: Signals) -> None:
+        combat = getattr(self, "_mizuki_combat_state", None)
+        phase = combat.phase.name if combat is not None else "GATHER"
+        trace.sample(
+            self.time,
+            phase,
+            minerals=self.minerals,
+            gas=self.vespene,
+            workers=self.workers.amount,
+            army_supply=self.supply_army,
+            supply_used=self.supply_used,
+            supply_cap=self.supply_cap,
+            ready_bases=self.townhalls.ready.amount,
+            visible_pressure_supply=round(state.local_pressure, 2),
+            scouted_air_weight=round(state.enemy_air, 2),
+            detection_risk=state.detection_risk,
+            macro_mode=self._last_macro_mode,
+        )
+
+    def _trace_intent(self, event: str, **details) -> None:
+        if self._trace is not None:
+            self._trace.record(self.time, event, **details)
+
+    def _anchors(self) -> tuple[Point2 | None, Point2 | None, Point2 | None]:
+        if self._wall_anchors is None:
+            top = None
+            try:
+                ramp: Ramp = self.main_base_ramp
+                top = ramp.top_center
+                if len(ramp.upper2_for_ramp_wall) != 2:
+                    self._wall_anchors = (top, None, None)
+                    return self._wall_anchors
+                corners = sorted(ramp.corner_depots, key=lambda p: (p.x, p.y))
+                self._wall_anchors = (
+                    top,
+                    corners[0] if corners else None,
+                    ramp.barracks_correct_placement,
+                )
+            except (ValueError, ArithmeticError, AssertionError):
+                # No ladder-shaped ramp or geometry too irregular for wall hints.
+                self._wall_anchors = (top, None, None)
+        return self._wall_anchors
 
     def _signals(self, contacts: list[Unit], structures: list[Unit]) -> Signals:
         now = self.time
@@ -176,8 +257,14 @@ class CompetitiveBot(BotAI):
             if not u.is_flying and u.can_attack_ground and u.distance_to(scout) < 11
         ]
         if threats and (scout.health_percentage < 0.6 or len(threats) >= 2):
-            scout.move(self.start_location)
-            self._scout_ordered = self.time
+            if self.time >= self._scout_retreat_until:
+                self._trace_intent("reaper_retreat", threats=len(threats))
+            self._scout_retreat_until = self.time + 8
+            if scout.is_idle or self.time - self._scout_ordered >= 2:
+                scout.move(self.start_location)
+                self._scout_ordered = self.time
+            return
+        if self.time < self._scout_retreat_until:
             return
         if self.time < 490 and self._scout_route:
             target = self._scout_route[0]
@@ -192,13 +279,42 @@ class CompetitiveBot(BotAI):
         elif scout.is_idle and scout.distance_to(self.start_location) > 9:
             scout.move(self.start_location)
 
+    def _missing_worker_contact(
+        self, contacts: list[Unit], bases: list[Unit], detection: bool
+    ) -> Contact | None:
+        now = self.time
+        current = {w.tag: (w.health, w.position) for w in self.workers}
+        unexplained = [e for e in self._unexplained_hits if now - e.stamp <= 5]
+        for tag, (health, old_position) in self._worker_sightings.items():
+            latest = current.get(tag)
+            if latest is not None and health - latest[0] < 12:
+                continue
+            p = latest[1] if latest is not None else old_position
+            if any(p.distance_to(b.position) < 13 for b in bases) and not any(
+                e.can_attack_ground and e.distance_to(p) < 13 for e in contacts
+            ):
+                unexplained.append(Contact(p, now))
+        self._worker_sightings = current
+        self._unexplained_hits = unexplained
+        for hit in reversed(unexplained):
+            if (
+                detection
+                or sum(
+                    hit.position.distance_to(other.position) <= 9
+                    for other in unexplained
+                )
+                >= 2
+            ):
+                self._unexplained_hits.clear()
+                return hit
+        return None
+
     def _orbitals(self, contacts: list[Unit], s: Signals) -> None:
         orbitals = sorted(
             self.structures(U.ORBITALCOMMAND).ready, key=lambda h: (-h.energy, h.tag)
         )
-        if not orbitals:
-            return
         bases = list(self.townhalls)
+        damage = self._missing_worker_contact(contacts, bases, s.detection_risk)
         hidden = [
             e
             for e in contacts
@@ -207,28 +323,29 @@ class CompetitiveBot(BotAI):
         ]
         if hidden:
             self._scan_contact = Contact(hidden[0].position, self.time)
-        # A local burst of damage with no visible attacker is Scan evidence, not omniscience.
-        current = {w.tag: w.health for w in self.workers}
-        wounded = [
-            w
-            for w in self.workers
-            if self._damaged_workers.get(w.tag, w.health) - w.health >= 12
-            and not any(e.can_attack_ground and e.distance_to(w) < 13 for e in contacts)
-        ]
-        if wounded and (s.detection_risk or len(wounded) >= 2):
-            self._scan_contact = Contact(wounded[0].position, self.time)
+        elif damage:
+            self._scan_contact = damage
             self._cloak_until = max(self._cloak_until, self.time + 35)
-        self._damaged_workers = current
+        if not orbitals:
+            return
         scan = self._scan_contact
         if scan and self.time - scan.stamp <= 8 and self.time - self._scan_last > 12:
             for orbital in orbitals:
                 if orbital.energy >= 50 and orbital(A.SCANNERSWEEP_SCAN, scan.position):
+                    self._trace_intent(
+                        "defensive_scan_queued",
+                        x=round(scan.position.x, 1),
+                        y=round(scan.position.y, 1),
+                        evidence="visible_cloak"
+                        if hidden
+                        else "unseen_worker_damage_or_previous_contact",
+                    )
                     self._scan_last = self.time
                     self._scan_contact = None
                     break
         for orbital in orbitals:
             if orbital.tag in self.unit_tags_received_action or orbital.energy < (
-                100 if s.detection_risk else 50
+                100 if s.detection_risk or self.time < self._cloak_until else 50
             ):
                 continue
             patches = [
@@ -244,14 +361,18 @@ class CompetitiveBot(BotAI):
                 orbital(A.CALLDOWNMULE_CALLDOWNMULE, mineral)
 
     def _depot_control(self, contacts: list[Unit]) -> None:
-        ramp = self.main_base_ramp.top_center
+        ramp, _, _ = self._anchors()
         for depot in self.structures({U.SUPPLYDEPOT, U.SUPPLYDEPOTLOWERED}).ready:
-            threat = depot.distance_to(ramp) < 12 and any(
-                e.can_attack_ground
-                and not e.is_flying
-                and e.type_id not in WORKER_TYPES
-                and e.distance_to(depot) < 8
-                for e in contacts
+            threat = (
+                ramp is not None
+                and depot.distance_to(ramp) < 12
+                and any(
+                    e.can_attack_ground
+                    and not e.is_flying
+                    and e.type_id not in WORKER_TYPES
+                    and e.distance_to(depot) < 8
+                    for e in contacts
+                )
             )
             if threat and depot.type_id == U.SUPPLYDEPOTLOWERED:
                 depot(A.MORPH_SUPPLYDEPOT_RAISE)
@@ -284,6 +405,40 @@ class CompetitiveBot(BotAI):
             return True
         return False
 
+    def _available_builder(self, position: Point2) -> Unit | None:
+        candidates = [
+            w
+            for w in self.workers
+            if w.tag not in self.unit_tags_received_action
+            and (w.is_idle or w.is_collecting)
+        ]
+        return min(
+            candidates,
+            key=lambda w: (w.distance_to(position) + (0 if w.is_idle else 2), w.tag),
+            default=None,
+        )
+
+    def _staff_refineries(self) -> None:
+        if self.time < self._next_refinery_staff:
+            return
+        self._next_refinery_staff = self.time + 5
+        if self.vespene >= 175 and self.vespene > self.minerals * 0.8:
+            return
+        for gas in sorted(self.gas_buildings.ready, key=lambda u: u.tag):
+            if gas.vespene_contents <= 0 or gas.surplus_harvesters >= 0:
+                continue
+            workers = [
+                w
+                for w in self.workers.closer_than(12, gas)
+                if w.tag not in self.unit_tags_received_action
+                and not w.is_carrying_resource
+                and (w.is_idle or w.is_gathering)
+                and w.order_target not in self.gas_buildings.tags
+            ]
+            workers.sort(key=lambda w: (not w.is_idle, w.distance_to(gas), w.tag))
+            for w in workers[: min(2, -gas.surplus_harvesters)]:
+                w.gather(gas)
+
     async def _build(
         self, kind: U, near: Point2, *, radius: int = 9, addon: bool = False
     ) -> bool:
@@ -295,33 +450,70 @@ class CompetitiveBot(BotAI):
             return False
         # Bound placement RPCs and avoid spending another worker on a rejected attempt every observation.
         self._next_build[kind] = self.time + 2.0
-        bases = [near]
-        if addon:
-            bases += [
-                near.offset(Point2(offset))
-                for offset in ((0, 5), (0, -5), (-5, 0), (5, 0))
-            ]
-        used_positions: set[Point2] = set()
-        for anchor in bases:
+        positions = [
+            building.position.offset(ADDON_OFFSET)
+            for building in self.structures({U.BARRACKS, U.FACTORY, U.STARPORT})
+            if not building.add_on_tag
+        ]
+        self._reserved_addons = {
+            p: expiry
+            for p, expiry in self._reserved_addons.items()
+            if expiry > self.time
+        }
+        positions.extend(p.offset(ADDON_OFFSET) for p in self._reserved_addons)
+        # Start with the preferred anchor, then choose alternate tiles only when needed.
+        # The native helper checks all candidates in a ring for addon clearance.
+        anchors = (
+            near,
+            near.offset((0, 6)),
+            near.offset((0, -6)),
+            near.offset((-6, 0)),
+        )
+        footprint = 1 if kind in {U.SUPPLYDEPOT, U.MISSILETURRET} else 1.5
+        for anchor in anchors:
             pos = await self.find_placement(
-                kind, near=anchor, max_distance=radius, random_alternative=False
+                kind,
+                near=anchor,
+                max_distance=radius,
+                random_alternative=False,
+                addon_place=addon,
             )
-            if pos is None or pos in used_positions:
+            if pos is None:
                 continue
-            used_positions.add(pos)
-            if addon and not await self.can_place_single(
-                U.SUPPLYDEPOT, pos.offset(ADDON_OFFSET)
+            if any(
+                abs(pos.x - p.x) < footprint + 1 and abs(pos.y - p.y) < footprint + 1
+                for p in positions
             ):
                 continue
-            worker = self.select_build_worker(pos)
+            if addon and any(
+                abs(pos.x + ADDON_OFFSET.x - p.x) < 2
+                and abs(pos.y + ADDON_OFFSET.y - p.y) < 2
+                for p in positions
+            ):
+                continue
+            worker = self._available_builder(pos)
             if worker is None or worker.tag in self.unit_tags_received_action:
                 continue
-            return bool(worker.build(kind, pos, can_afford_check=True))
+            if worker.build(kind, pos, can_afford_check=True):
+                if addon:
+                    self._reserved_addons[pos] = self.time + 25
+                self._trace_intent(
+                    "build_queued", unit=kind.name, x=round(pos.x, 1), y=round(pos.y, 1)
+                )
+                return True
+        self._trace_intent(
+            "build_site_unavailable", unit=kind.name, workers=self.workers.amount
+        )
         return False
+
+    def _working_refineries(self) -> int:
+        return sum(
+            refinery.vespene_contents > 0 for refinery in self.gas_buildings.ready
+        )
 
     async def _gas(self, limit: int) -> bool:
         if (
-            self._plan_total(U.REFINERY) >= limit
+            self._working_refineries() + self._pending(U.REFINERY) >= limit
             or not self.can_afford(U.REFINERY)
             or self._pending(U.REFINERY)
         ):
@@ -332,7 +524,7 @@ class CompetitiveBot(BotAI):
             ):
                 if gas.vespene_contents <= 0 or self.gas_buildings.closer_than(1, gas):
                     continue
-                worker = self.select_build_worker(gas.position)
+                worker = self._available_builder(gas.position)
                 if (
                     worker is not None
                     and worker.tag not in self.unit_tags_received_action
@@ -346,11 +538,9 @@ class CompetitiveBot(BotAI):
             return
         supply = {"left": self.supply_left}
         townhalls = sorted(self.townhalls.ready, key=lambda u: u.tag)
-        ramp = self.main_base_ramp.top_center
-        interior = self.start_location.towards(self.game_info.map_center, -7)
-        depot_spots = sorted(
-            self.main_base_ramp.corner_depots, key=lambda p: (p.x, p.y)
-        )
+        ramp, depot_anchor, rax_anchor = self._anchors()
+        home = townhalls[0].position if townhalls else self.start_location
+        interior = home.towards(self.game_info.map_center, -6)
         depots = self.structures({U.SUPPLYDEPOT, U.SUPPLYDEPOTLOWERED})
         rax = self.structures(U.BARRACKS)
         producers = (
@@ -366,15 +556,17 @@ class CompetitiveBot(BotAI):
             producers,
         )
         if build_depot:
-            location = depot_spots[0] if not depots and depot_spots else interior
+            location = (
+                depot_anchor if not depots and depot_anchor is not None else interior
+            )
             await self._build(U.SUPPLYDEPOT, location, radius=10)
         if depots.ready and not self._plan_total(U.BARRACKS):
             await self._build(
                 U.BARRACKS,
-                self.main_base_ramp.barracks_correct_placement or ramp,
+                rax_anchor or ramp or interior,
                 addon=True,
             )
-        if rax and self.time >= 38:
+        if rax and self.time >= 38 and (s.local_pressure < 5 or s.time > 230):
             gas_target = (
                 1
                 if not self.structures(U.FACTORY)
@@ -397,7 +589,7 @@ class CompetitiveBot(BotAI):
                     can_afford_check=True,
                 )
             elif self.workers.amount + self._pending(U.SCV) < desired_workers(
-                len(townhalls), self.gas_buildings.ready.amount
+                len(townhalls), self._working_refineries()
             ):
                 self._train(hall, U.SCV, supply)
 
@@ -414,16 +606,35 @@ class CompetitiveBot(BotAI):
         bank_natural = (
             s.bases == 1
             and expanding
-            and 110 <= self.time < 170
+            and 110 <= self.time < 175
             and 5 <= self.supply_army < 16
             and s.local_pressure < 3
-            and 200 <= self.minerals < 400
+            and 185 <= self.minerals < self.calculate_cost(U.COMMANDCENTER).minerals
         )
-        if not bank_natural:
+        emergency = s.local_pressure >= 5
+        mode = (
+            "emergency" if emergency else "bank_natural" if bank_natural else "normal"
+        )
+        if mode != self._last_macro_mode:
+            self._trace_intent(
+                "macro_mode",
+                previous=self._last_macro_mode,
+                current=mode,
+                pressure=round(s.local_pressure, 2),
+                bases=s.bases,
+            )
+            self._last_macro_mode = mode
+        if emergency:
+            # Use established buildings before investing in new production under attack.
+            await self._addons_and_army(s, supply, False)
             await self._tech(s, interior)
-        await self._addons_and_army(s, supply, bank_natural)
+        else:
+            if not bank_natural:
+                await self._tech(s, interior)
+            await self._addons_and_army(s, supply, bank_natural)
         if s.local_pressure < 4:
             self._resume_construction()
+            self._staff_refineries()
         if s.local_pressure < 3 and self.time > 125:
             self._repair(townhalls)
 
@@ -443,13 +654,17 @@ class CompetitiveBot(BotAI):
             if not await self.can_place_single(U.COMMANDCENTER, location):
                 self._blocked_expansions[location] = self.time + 22
                 continue
-            worker = self.select_build_worker(location)
+            worker = self._available_builder(location)
             if worker is None or worker.tag in self.unit_tags_received_action:
                 continue
             if not await self.client.query_pathing(worker.position, location):
                 self._blocked_expansions[location] = self.time + 22
                 continue
             if worker.build(U.COMMANDCENTER, location, can_afford_check=True):
+                if getattr(self, "_trace", None) is not None:
+                    self._trace_intent(
+                        "expand_queued", x=round(location.x, 1), y=round(location.y, 1)
+                    )
                 return
 
     async def _tech(self, s: Signals, near: Point2) -> None:
@@ -519,9 +734,9 @@ class CompetitiveBot(BotAI):
         self, s: Signals, supply: dict[str, float], save: bool
     ) -> None:
         can_upgrade = self.structures(U.ARMORY).ready.exists
-        for bay in sorted(
-            self.structures(U.ENGINEERINGBAY).ready.idle, key=lambda u: u.tag
-        ):
+        upgrades = not save and s.local_pressure < 5
+        bays = self.structures(U.ENGINEERINGBAY).ready.idle if upgrades else []
+        for bay in sorted(bays, key=lambda u: u.tag):
             for level in range(3 if can_upgrade else 1):
                 chosen = False
                 for up in (WEAPONS[level], ARMOR[level]):
@@ -533,7 +748,7 @@ class CompetitiveBot(BotAI):
                         break
                 if chosen:
                     break
-        if not save:
+        if upgrades:
             self._stim_and_support()
         tech_count = self._plan_total(U.BARRACKSTECHLAB)
         tech_wanted = 2 if s.enemy_armor or s.bases >= 3 else 1

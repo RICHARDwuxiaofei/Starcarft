@@ -70,10 +70,12 @@ class _CombatState:
     retreat_until: float = 0.0
     last_air_seen: float = 0.0
     last_tank_contact: dict[int, float] = field(default_factory=dict)
+    air_evade_until: dict[int, float] = field(default_factory=dict)
     last: dict[int, tuple[tuple, float]] = field(default_factory=dict)
     route: tuple[Point2, ...] = ()
     ground_sweep: _Sweep = field(default_factory=_Sweep)
     air_sweep: _Sweep = field(default_factory=_Sweep)
+    core_anchor: Point2 | None = None
 
 
 def _center(group: list[Unit], fallback: Point2) -> Point2:
@@ -138,6 +140,75 @@ def _strength(group: list[Unit]) -> float:
     return sum(
         _weight(u) * (0.45 + 0.55 * max(u.health_percentage, u.shield_percentage))
         for u in group
+    )
+
+
+def _cohort(
+    units: list[Unit], fallback: Point2, previous: Point2 | None
+) -> tuple[Point2, list[Unit]]:
+    """Anchor on an actual unit in the strongest locally concentrated force."""
+    if not units:
+        return fallback, []
+    weighted = [(u, _strength([u])) for u in units]
+    best_score = (-1.0, -1.0, 0)
+    best_cluster: list[Unit] = []
+    for unit, _ in weighted:
+        ux, uy = unit.position
+        neighboring = [
+            (ally, weight)
+            for ally, weight in weighted
+            if (ally.position.x - ux) ** 2 + (ally.position.y - uy) ** 2 <= 12**2
+        ]
+        cluster = [ally for ally, _ in neighboring]
+        score = (
+            sum(weight for _, weight in neighboring),
+            -unit.distance_to(previous or fallback),
+            -unit.tag,
+        )
+        if score > best_score:
+            best_score, best_cluster = score, cluster
+    mean = _center(best_cluster, fallback)
+    anchor = min(best_cluster, key=lambda u: (u.distance_to(mean), u.tag)).position
+    return anchor, [u for u in units if u.distance_to(anchor) <= 13]
+
+
+def _armor_screen(ground: list[Unit], center: Point2, goal: Point2) -> Point2 | None:
+    if center.distance_to(goal) < 12:
+        return None
+    tanks = [u for u in ground if u.type_id in _TANKS and u.distance_to(center) <= 19]
+    if not tanks:
+        return None
+    tank = min(tanks, key=lambda u: (u.distance_to(goal), u.tag))
+    return tank.position.towards(goal, min(8, tank.distance_to(goal)))
+
+
+def _screen_fallback(
+    bot: BotAI, pos: Point2, screen: Point2 | None, goal: Point2
+) -> Point2 | None:
+    if screen is None:
+        return None
+    length = screen.distance_to(goal)
+    if length < 3:
+        return None
+    dx, dy = (goal.x - screen.x) / length, (goal.y - screen.y) / length
+    excess = (pos.x - screen.x) * dx + (pos.y - screen.y) * dy
+    if excess <= 2.5:
+        return None
+    lane = Point2((pos.x - dx * (excess + 1), pos.y - dy * (excess + 1)))
+    for candidate in (lane, screen):
+        if _inside(bot, candidate) and bot.in_pathing_grid(candidate):
+            return candidate
+    return None
+
+
+def _chase(unit: Unit, target: Unit, goal: Point2, core: Point2) -> bool:
+    """A short weapon-range correction, not a solo pursuit away from the army."""
+    reach = unit.air_range if target.is_flying else unit.ground_range
+    return (
+        unit.distance_to(target) <= reach + unit.radius + target.radius + 2.5
+        and unit.distance_to(core) <= 12
+        and target.distance_to(core) <= 14
+        and target.distance_to(goal) <= unit.distance_to(goal) + 1.5
     )
 
 
@@ -373,7 +444,7 @@ def _explore(
     sweep = state.air_sweep if can_fly else state.ground_sweep
     if sweep.waypoint is not None and (
         bot.is_visible(sweep.waypoint)
-        or sweep.waypoint.distance_to(center) < 7
+        or (can_fly and sweep.waypoint.distance_to(center) < 3.5)
         or now - sweep.waypoint_since > 29
     ):
         sweep.visits[sweep.waypoint] = now
@@ -437,7 +508,14 @@ def _select(
 
 
 def _ground_objective(
-    bot: BotAI, state: _CombatState, now: float, center: Point2, enemies: list[Unit]
+    bot: BotAI,
+    state: _CombatState,
+    now: float,
+    center: Point2,
+    enemies: list[Unit],
+    floating: list[Unit],
+    *,
+    can_shoot_air: bool,
 ) -> Point2:
     buildings = [e for e in enemies if e.is_structure and not e.is_flying]
     if buildings:
@@ -449,6 +527,35 @@ def _ground_objective(
     ]
     if nearby:
         return min(nearby, key=lambda e: (e.distance_to(center), e.tag)).position
+    if can_shoot_air and floating:
+        for target in sorted(floating, key=lambda e: (e.distance_to(center), e.tag)):
+            tiles = [
+                target.position.towards(
+                    Point2((target.position.x + dx, target.position.y + dy)), step
+                )
+                for step in (2, 4, 5.5)
+                for dx, dy in (
+                    (1, 0),
+                    (1, 1),
+                    (0, 1),
+                    (-1, 1),
+                    (-1, 0),
+                    (-1, -1),
+                    (0, -1),
+                    (1, -1),
+                )
+            ]
+            landing = min(
+                (
+                    p
+                    for p in [target.position, *tiles]
+                    if _inside(bot, p) and bot.in_pathing_grid(p)
+                ),
+                key=center.distance_to,
+                default=None,
+            )
+            if landing is not None:
+                return landing
     return _explore(bot, state, now, center, can_fly=False)
 
 
@@ -514,12 +621,20 @@ def _infantry(
     *,
     withdrawing: bool,
     committing: bool,
+    pressure: bool,
+    core: Point2,
+    screen: Point2 | None,
 ) -> None:
     # A defensive shot is useful only once already back at the rally point.
     if withdrawing and unit.distance_to(goal) > 3:
         _send(state, now, unit, "move", goal)
         return
     target, in_range = _select(unit, contacts, max_distance=9.5)
+    guard = (
+        _screen_fallback(bot, unit.position, screen, goal)
+        if pressure and not in_range
+        else None
+    )
     if target:
         nearby = [
             e
@@ -565,11 +680,44 @@ def _infantry(
             if fallback and (committing or fallback.distance_to(goal) < 10):
                 _send(state, now, unit, "move", fallback)
                 return
-        if in_range or (committing and unit.distance_to(goal) <= 14):
+        pursue = (
+            committing
+            and guard is None
+            and (
+                _chase(unit, target, goal, core)
+                if pressure
+                else unit.distance_to(goal) <= 14
+            )
+        )
+        if in_range or pursue:
             _send(state, now, unit, "attack", target)
+            return
+    if guard is not None:
+        _send(state, now, unit, "move", guard)
+        return
+    if pressure and target and not in_range and unit.distance_to(goal) > 2.7:
+        # A move command suppresses the engine's own off-axis chase. Advance a
+        # few tiles and re-evaluate the visible contact before firing.
+        step = unit.position.towards(goal, min(4, unit.distance_to(goal)))
+        if _inside(bot, step) and bot.in_pathing_grid(step):
+            _send(state, now, unit, "move", step)
             return
     if unit.distance_to(goal) > 2.7:
         _send(state, now, unit, "move" if withdrawing else "attack", goal)
+
+
+def _unsafe_air(
+    unit: Unit, point: Point2, enemies: list[Unit], padding: float = 1.3
+) -> bool:
+    return any(
+        e.distance_to(point)
+        < (
+            8
+            if e.type_id == U.BUNKER
+            else e.air_range + e.radius + unit.radius + padding
+        )
+        for e in enemies
+    )
 
 
 def _air_support(
@@ -584,18 +732,21 @@ def _air_support(
     *,
     withdrawing: bool,
 ) -> None:
-    danger = min(anti_air, key=lambda e: (unit.distance_to(e), e.tag), default=None)
-    in_danger = danger is not None and (
-        danger.target_in_range(unit, bonus_distance=1.35)
-        or (danger.type_id == U.BUNKER and unit.distance_to(danger) < 8)
+    danger = min(
+        (e for e in anti_air if _unsafe_air(unit, unit.position, [e])),
+        key=lambda e: (unit.distance_to(e), e.tag),
+        default=None,
     )
-    if in_danger:
+    if danger is not None:
         fallback = _away(bot, unit, danger, 5.5)
         if fallback:
+            state.air_evade_until[unit.tag] = now + 2.5
             _send(state, now, unit, "move", fallback)
             return
     if withdrawing and unit.distance_to(goal) > 4:
         _send(state, now, unit, "move", goal)
+        return
+    if now < state.air_evade_until.get(unit.tag, 0):
         return
     if unit.type_id == U.MEDIVAC and unit.energy >= 5 and not withdrawing:
         injured = [
@@ -604,6 +755,7 @@ def _air_support(
             if a.type_id in _BIO
             and a.health_percentage < 0.97
             and unit.distance_to(a) < 4.5
+            and not _unsafe_air(unit, a.position, anti_air)
         ]
         if injured:
             patient = min(
@@ -611,8 +763,20 @@ def _air_support(
             )
             _send(state, now, unit, AbilityId.MEDIVACHEAL_HEAL, patient)
             return
-    guard = center.towards(goal, -3) if center.distance_to(goal) > 5 else center
-    if _inside(bot, guard) and unit.distance_to(guard) > 4:
+    guard_candidates = (
+        [center.towards(goal, -distance) for distance in (3, 6, 9)]
+        if center.distance_to(goal) > 5
+        else [center]
+    )
+    guard = next(
+        (
+            p
+            for p in guard_candidates
+            if _inside(bot, p) and not _unsafe_air(unit, p, anti_air)
+        ),
+        None,
+    )
+    if guard is not None and unit.distance_to(guard) > 4:
         _send(state, now, unit, "move", guard)
 
 
@@ -628,6 +792,7 @@ def _viking(
     withdrawing: bool,
     committing: bool,
     has_ground: bool,
+    floating_cleanup: list[Unit],
 ) -> None:
     airborne = unit.type_id == U.VIKINGFIGHTER
     if withdrawing:
@@ -651,7 +816,14 @@ def _viking(
     )
     if airborne:
         target, in_range = _select(unit, air, max_distance=20 if not has_ground else 15)
-        if target and (in_range or committing or unit.distance_to(center) <= 7):
+        supported_air_chase = target is not None and (
+            (not has_ground and committing)
+            or (
+                target.distance_to(center) <= 16
+                and (committing or unit.distance_to(center) <= 7)
+            )
+        )
+        if target and (in_range or supported_air_chase):
             if (
                 0 < unit.weapon_cooldown
                 and target.target_in_range(unit, bonus_distance=0.45)
@@ -663,6 +835,10 @@ def _viking(
                     return
             _send(state, now, unit, "attack", target)
             return
+        if floating_cleanup:
+            closest = min(floating_cleanup, key=lambda e: (unit.distance_to(e), e.tag))
+            _send(state, now, unit, "attack", closest)
+            return
         if committing and not has_ground and air:
             closest = min(air, key=lambda e: (unit.distance_to(e), e.tag))
             _send(state, now, unit, "attack", closest)
@@ -671,22 +847,25 @@ def _viking(
         nearest_building = min(
             buildings, key=lambda e: (unit.distance_to(e), e.tag), default=None
         )
-        unsafe_landing = any(
-            _danger(e)
-            and (e.can_attack_ground or e.type_id in _STATIC | _HIGH_VALUE)
-            and unit.distance_to(e)
-            < max(5, e.ground_range + e.radius + unit.radius + 1)
-            for e in contacts
-        )
+
+        def landing_safe(point: Point2) -> bool:
+            return not any(
+                (e.can_attack_ground or e.type_id in _HIGH_VALUE | {U.BUNKER})
+                and e.distance_to(point)
+                < max(5, e.ground_range + e.radius + unit.radius + 1)
+                for e in contacts
+            )
+
+        min_health = 0.28 if not has_ground else 0.66
         if (
             committing
             and nearest_building
             and unit.distance_to(nearest_building) < 8
             and (not has_ground or now > 600)
             and now - state.last_air_seen > 22
-            and unit.health_percentage > 0.66
+            and unit.health_percentage > min_health
             and bot.in_pathing_grid(unit.position)
-            and not unsafe_landing
+            and landing_safe(unit.position)
         ):
             _send(state, now, unit, AbilityId.MORPH_VIKINGASSAULTMODE)
             return
@@ -694,8 +873,7 @@ def _viking(
             committing
             and not has_ground
             and nearest_building
-            and not unsafe_landing
-            and unit.health_percentage > 0.66
+            and unit.health_percentage > min_health
             and now - state.last_air_seen > 22
         ):
             # Pick an adjacent landing tile, not the building footprint.
@@ -708,7 +886,11 @@ def _viking(
                 for angle in (0, 0.79, 1.57, 2.36, 3.14, 3.93, 4.71, 5.50)
             ]
             landing = min(
-                (p for p in pads if _inside(bot, p) and bot.in_pathing_grid(p)),
+                (
+                    p
+                    for p in pads
+                    if _inside(bot, p) and bot.in_pathing_grid(p) and landing_safe(p)
+                ),
                 key=unit.distance_to,
                 default=None,
             )
@@ -727,10 +909,16 @@ def _viking(
         if unit.distance_to(desired) > 3.5:
             _send(state, now, unit, "move", desired)
     else:
-        if air or (
-            not has_ground
-            and committing
-            and not any(not e.is_flying and e.distance_to(unit) < 12 for e in contacts)
+        if (
+            air
+            or floating_cleanup
+            or (
+                not has_ground
+                and committing
+                and not any(
+                    not e.is_flying and e.distance_to(unit) < 12 for e in contacts
+                )
+            )
         ):
             _send(state, now, unit, AbilityId.MORPH_VIKINGFIGHTERMODE)
             return
@@ -761,16 +949,24 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
     ground = [u for u in army if not u.is_flying]
     units_for_center = ground or army or air_support
     home = _home(bot, units_for_center)
-    center = _center(units_for_center, home)
+    center, core = _cohort(ground or army, home, state.core_anchor)
+    state.core_anchor = center if core else None
     enemies = [e for e in (*bot.enemy_units, *bot.enemy_structures) if _observed(e)]
     if any(e.is_flying and (_danger(e) or e.is_structure) for e in enemies):
         state.last_air_seen = now
     defense = _defense(bot, enemies, center)
-    local_contacts = [e for e in enemies if e.distance_to(center) <= 22]
+    local_contacts = [e for e in enemies if e.distance_to(center) <= 18]
+    local_air = [u for u in army if u.is_flying and u.distance_to(center) < 13]
+    if local_contacts and all(e.is_flying for e in local_contacts):
+        relevant = [u for u in core if u.can_attack_air] + [
+            u for u in local_air if u not in core
+        ]
+    else:
+        relevant = core
     phase = _next_phase(
         state,
         now,
-        _strength(army),
+        _strength(relevant),
         _strength(local_contacts),
         center.distance_to(home),
         sum(not h.is_flying for h in bot.townhalls),
@@ -778,6 +974,11 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
     withdrawing = phase == _Phase.RETREAT and defense is None
     pressure = phase == _Phase.PRESSURE and defense is None
     committing = defense is not None or pressure
+    floating_cleanup = (
+        [e for e in enemies if e.is_structure and e.is_flying]
+        if pressure and not any(e.is_structure and not e.is_flying for e in enemies)
+        else []
+    )
     goal = home
     contacts = enemies
     if defense is not None:
@@ -790,7 +991,15 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
         ]
     elif pressure and army:
         if ground:
-            goal = _ground_objective(bot, state, now, center, contacts)
+            goal = _ground_objective(
+                bot,
+                state,
+                now,
+                center,
+                contacts,
+                floating_cleanup,
+                can_shoot_air=any(u.can_attack_air for u in ground),
+            )
         else:
             goal = _explore(bot, state, now, center, can_fly=True)
     elif not withdrawing:
@@ -805,6 +1014,16 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
     state.last_tank_contact = {
         tag: when for tag, when in state.last_tank_contact.items() if tag in alive
     }
+    state.air_evade_until = {
+        tag: when
+        for tag, when in state.air_evade_until.items()
+        if tag in alive and when > now
+    }
+    screen = (
+        _armor_screen(ground, center, goal)
+        if pressure and not floating_cleanup
+        else None
+    )
     zones = _hazards(bot)
     for unit in army:
         if _evade(bot, state, now, unit, zones):
@@ -821,6 +1040,9 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
                 goal,
                 withdrawing=withdrawing,
                 committing=committing,
+                pressure=pressure,
+                core=center,
+                screen=screen,
             )
         elif unit.type_id in _VIKINGS:
             has_ground = bool(ground) and (len(ground) > 1 or ground[0].tag != unit.tag)
@@ -835,6 +1057,7 @@ async def control_combat(bot: BotAI, iteration: int) -> None:
                 withdrawing=withdrawing,
                 committing=committing,
                 has_ground=has_ground,
+                floating_cleanup=floating_cleanup,
             )
     for unit in air_support:
         if _evade(bot, state, now, unit, zones):

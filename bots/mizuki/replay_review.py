@@ -460,7 +460,10 @@ def _write_json(path: Path, result: dict[str, Any]) -> None:
 
 
 def main(
-    argv: list[str] | None = None, *, local_run: dict[str, Any] | None = None
+    argv: list[str] | None = None,
+    *,
+    local_run: dict[str, Any] | None = None,
+    skip_reason: str | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("replay", nargs="+", type=Path, help=".SC2Replay paths")
@@ -486,6 +489,9 @@ def main(
     reports, failures = [], []
     for index, replay in enumerate(args.replay, 1):
         name = f"replay-{index}" if args.anonymous else replay.name
+        if skip_reason is not None:
+            failures.append({"source": name, "error": skip_reason})
+            continue
         try:
             data = parse_replay(replay)
             if args.anonymous:

@@ -146,3 +146,22 @@ def test_preserves_parser_stages_and_build_clock():
     assert result["loops_per_second"] == 22.4
     assert result["players"][0]["expansions"][-1]["stage"] == "completed"
     assert result["players"][0]["expansions"][-1]["unit_tag"] == 77
+
+
+def test_missing_fresh_replay_still_exports_diagnostics_without_loading_old_file(
+    tmp_path, monkeypatch
+):
+    replay = tmp_path / "battle.SC2Replay"
+    replay.write_bytes(b"old replay")
+    out = tmp_path / "analysis.json"
+    game = Mock(return_value=Result.Defeat)
+    parse = Mock(side_effect=AssertionError("An old replay must not be loaded"))
+    monkeypatch.setattr(smoke.maps, "get", Mock(return_value=object()))
+    monkeypatch.setattr(smoke, "run_game", game)
+    monkeypatch.setattr(replay_review, "parse_replay", parse)
+    assert smoke.main(["--replay", str(replay), "--review-json", str(out)]) != 0
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert result["matches"] == []
+    assert "older replay was not reused" in result["errors"][0]["error"]
+    assert result["local_smoke"]["decision_trace"]["steps_completed"] == 0
+    parse.assert_not_called()
