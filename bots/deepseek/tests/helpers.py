@@ -271,6 +271,20 @@ class FakeBotWorld:
 
     async def _build(self, building, near=None, **kwargs):
         self.builds.append((building, {"near": near, **kwargs}))
+        # 模拟建筑进入在建状态，让后续步骤看到它的存在。
+        if building in {
+            UnitTypeId.SUPPLYDEPOT,
+            UnitTypeId.BARRACKS,
+            UnitTypeId.FACTORY,
+            UnitTypeId.STARPORT,
+            UnitTypeId.ENGINEERINGBAY,
+            UnitTypeId.ARMORY,
+            UnitTypeId.REFINERY,
+            UnitTypeId.BUNKER,
+            UnitTypeId.MISSILETURRET,
+        }:
+            position = near.position if hasattr(near, "position") else near
+            self.add_structure(building, position, is_ready=False)
         return True
 
     async def _expand_now(self, location=None, **kwargs):

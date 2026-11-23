@@ -251,6 +251,8 @@ class CompetitiveBot(BotAI):
         self._last_stim: float = 0.0
         self._last_worker_flee: float = 0.0
         self._last_bunker_try: float = -999.0
+        self._last_structure_build: float = -999.0
+        self._last_refinery_build: float = -999.0
         self._scout_tag: int | None = None
         self._scout_sent: bool = False
         self._natural: Point2 | None = None
@@ -300,7 +302,7 @@ class CompetitiveBot(BotAI):
         self._manage_orbital()
         await self._manage_economy()
         opening = await self._manage_opening()
-        # 二人口完成后即便还在等 400 矿开分矿，也要允许补人口，避免卡死。
+        # 二人口完成后即便还在等 400 矿开分矿，也要允许补人口。
         if not opening or self._open_depot2:
             await self._manage_supply()
         self._manage_addons()
@@ -328,6 +330,14 @@ class CompetitiveBot(BotAI):
             return False
 
         anchor = self._main_base().position
+        # 开局补给站被拆会导致人口卡死，发现后重新走一次补给站步骤。
+        if (
+            self._open_depot1
+            and not self.structures(UnitTypeId.SUPPLYDEPOT)
+            and self.supply_left <= 4
+        ):
+            self._open_depot1 = False
+
         # 1) 14 人口补给站。
         if not self._open_depot1:
             if self.supply_used < 13 or self.minerals < 100:
@@ -392,8 +402,10 @@ class CompetitiveBot(BotAI):
                 self._open_cc = True
                 self._last_expand = self.time
                 logger.info("[DeepSeek] 单兵营双开：自然分矿开工")
-            elif self.time >= 420:
+            elif self.time >= 300:
+                # 长期攒不到 400 矿（通常是被压制），先放行工厂/星港，分矿交给通用逻辑。
                 self._open_cc = True
+                logger.warning("[DeepSeek] 分矿迟迟无法开工，先恢复科技生产")
             return True
 
         self._opening_done = True
@@ -499,14 +511,15 @@ class CompetitiveBot(BotAI):
             desired_refineries = min(6, len(self.townhalls) * 2)
         if (
             self._opening_done
-            and refineries + self.already_pending(UnitTypeId.REFINERY)
-            < desired_refineries
+            and refineries < desired_refineries
             and self.minerals >= 100
             and self._can_start_building(75)
+            and self.time - self._last_refinery_build > 6
         ):
             geyser = self._available_geyser()
             if geyser is not None:
                 await self.build(UnitTypeId.REFINERY, near=geyser)
+                self._last_refinery_build = self.time
 
         if self.time - self._last_rebalance >= 0.4:
             self._last_rebalance = self.time
@@ -679,6 +692,9 @@ class CompetitiveBot(BotAI):
             return
         if self._threat_level > 0:
             return
+        # 新建筑之间留 5 秒间隔，避免一次拉走太多农民。
+        if self.time - self._last_structure_build < 5:
+            return
 
         targets = self._structure_targets()
         # 先补兵营，再补科技；每步最多开工一个建筑，避免农民全部停工。
@@ -692,9 +708,8 @@ class CompetitiveBot(BotAI):
             target = targets[unit_type]
             if target <= 0:
                 continue
-            have = self.structures(unit_type).amount + int(
-                self.already_pending(unit_type)
-            )
+            # structures() 已包含在建建筑，不能再叠加 already_pending，否则会少建。
+            have = self.structures(unit_type).amount
             if have >= target:
                 continue
             if self.minerals < 200 and unit_type != UnitTypeId.BARRACKS:
@@ -708,6 +723,7 @@ class CompetitiveBot(BotAI):
                 max_distance=14,
                 random_alternative=False,
             )
+            self._last_structure_build = self.time
             return
 
     def _manage_addons(self) -> None:
@@ -853,8 +869,8 @@ class CompetitiveBot(BotAI):
             len(self.townhalls),
             self._threat_level,
         )
-        pending_cc = int(self.already_pending(UnitTypeId.COMMANDCENTER))
-        if len(self.townhalls) + pending_cc >= desired:
+        # townhalls 已包含在建的指挥中心。
+        if len(self.townhalls) >= desired:
             return
         if self.minerals < 400 or not self.can_afford(UnitTypeId.COMMANDCENTER):
             return

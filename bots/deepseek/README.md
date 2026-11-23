@@ -7,6 +7,7 @@
 
 ```python
 from bots.deepseek.bot import CompetitiveBot
+
 # 或
 from bots.deepseek import CompetitiveBot
 ```

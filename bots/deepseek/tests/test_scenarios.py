@@ -46,6 +46,7 @@ def test_opening_takes_natural_expansion_after_tech():
     world.bot._open_rax = True
     world.bot._open_gas = True
     world.bot._open_depot2 = True
+    world.add_structure(UnitTypeId.SUPPLYDEPOT, (48, 50))
     world.bot.supply_used = 24
     world.bot.minerals = 450
     world.bot._natural = Point2((62, 50))
@@ -63,6 +64,7 @@ def test_opening_does_not_stall_forever_when_minerals_never_reach_400():
     world.bot._open_rax = True
     world.bot._open_gas = True
     world.bot._open_depot2 = True
+    world.add_structure(UnitTypeId.SUPPLYDEPOT, (48, 50))
     world.bot.minerals = 0
     world.time_seconds = 421
 
