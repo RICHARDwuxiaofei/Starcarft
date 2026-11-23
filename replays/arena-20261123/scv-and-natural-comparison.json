@@ -1,0 +1,376 @@
+{
+  "window_seconds": [
+    596.160714,
+    666.071429
+  ],
+  "window_source": "previous formal replay's loss cluster overlapping 10:00",
+  "formal": {
+    "duration_seconds": 811.071429,
+    "warnings": [],
+    "result": {
+      "mizuki": "loss",
+      "webgpt": "win"
+    },
+    "scv_at_window_start": 46,
+    "scv_from_start_remaining": 13,
+    "scv_at_window_end_including_new": 20,
+    "scv_deaths": 37,
+    "scv_deaths_by_killer": {
+      "SiegeTankSieged": 30,
+      "Marine": 6,
+      "Marauder": 1
+    },
+    "enemy_attributed_unit_and_building_losses": 73,
+    "scv_at_minutes": {
+      "9": 42,
+      "10": 46,
+      "11": 22,
+      "12": 3
+    },
+    "second_base": {
+      "completed": {
+        "time": 192.991071,
+        "loop": 4323,
+        "player": 1,
+        "kind": "expansion",
+        "label": "CommandCenter",
+        "stage": "completed",
+        "unit_tag": 67108865,
+        "unit_type": "CommandCenter",
+        "x": 156,
+        "y": 41
+      },
+      "destroyed": {
+        "time": 635.133929,
+        "loop": 14227,
+        "player": 1,
+        "kind": "loss",
+        "label": "OrbitalCommand",
+        "unit_type": "OrbitalCommand",
+        "unit_tag": 67108865,
+        "victim_player": 1,
+        "victim_tag": 67108865,
+        "killer_player": 2,
+        "killer_tag": 118489092,
+        "killer_type": "SiegeTankSieged",
+        "x": 156,
+        "y": 41,
+        "stage": "destroyed"
+      },
+      "alive_at_window_end": false,
+      "lifts_in_window": []
+    },
+    "nearby_engagement_candidates": [
+      {
+        "start": 418.660714,
+        "end": 476.785714,
+        "mizuki_scv_losses": 8,
+        "attributed_losses": 71
+      },
+      {
+        "start": 524.6875,
+        "end": 594.107143,
+        "mizuki_scv_losses": 1,
+        "attributed_losses": 76
+      },
+      {
+        "start": 596.160714,
+        "end": 666.071429,
+        "mizuki_scv_losses": 37,
+        "attributed_losses": 94
+      },
+      {
+        "start": 667.098214,
+        "end": 736.696429,
+        "mizuki_scv_losses": 24,
+        "attributed_losses": 61
+      }
+    ]
+  },
+  "training": {
+    "duration_seconds": 903.035714,
+    "warnings": [],
+    "result": {
+      "mizuki": "loss",
+      "webgpt": "win"
+    },
+    "scv_at_window_start": 23,
+    "scv_from_start_remaining": 23,
+    "scv_at_window_end_including_new": 24,
+    "scv_deaths": 0,
+    "scv_deaths_by_killer": {},
+    "enemy_attributed_unit_and_building_losses": 8,
+    "scv_at_minutes": {
+      "9": 24,
+      "10": 23,
+      "11": 24,
+      "12": 27
+    },
+    "second_base": {
+      "completed": {
+        "time": 183.660714,
+        "loop": 4114,
+        "player": 1,
+        "kind": "expansion",
+        "label": "CommandCenter",
+        "stage": "completed",
+        "unit_tag": 66584577,
+        "unit_type": "CommandCenter",
+        "x": 41,
+        "y": 19
+      },
+      "destroyed": {
+        "time": 463.839286,
+        "loop": 10390,
+        "player": 1,
+        "kind": "loss",
+        "label": "OrbitalCommand",
+        "unit_type": "OrbitalCommand",
+        "unit_tag": 66584577,
+        "victim_player": 1,
+        "victim_tag": 66584577,
+        "killer_player": 2,
+        "killer_tag": 80478211,
+        "killer_type": "Marauder",
+        "x": 41,
+        "y": 19,
+        "stage": "destroyed"
+      },
+      "alive_at_window_end": false,
+      "lifts_in_window": []
+    },
+    "nearby_engagement_candidates": [
+      {
+        "start": 408.839286,
+        "end": 409.776786,
+        "mizuki_scv_losses": 0,
+        "attributed_losses": 3
+      },
+      {
+        "start": 413.839286,
+        "end": 483.526786,
+        "mizuki_scv_losses": 21,
+        "attributed_losses": 111
+      },
+      {
+        "start": 418.258929,
+        "end": 424.151786,
+        "mizuki_scv_losses": 0,
+        "attributed_losses": 4
+      },
+      {
+        "start": 486.517857,
+        "end": 548.928571,
+        "mizuki_scv_losses": 5,
+        "attributed_losses": 58
+      },
+      {
+        "start": 557.723214,
+        "end": 626.696429,
+        "mizuki_scv_losses": 1,
+        "attributed_losses": 46
+      },
+      {
+        "start": 631.696429,
+        "end": 701.5625,
+        "mizuki_scv_losses": 0,
+        "attributed_losses": 60
+      },
+      {
+        "start": 704.642857,
+        "end": 745.267857,
+        "mizuki_scv_losses": 0,
+        "attributed_losses": 28
+      }
+    ]
+  },
+  "seven_minute_to_window_end": {
+    "window_seconds": [
+      420,
+      666.071429
+    ],
+    "formal": {
+      "duration_seconds": 811.071429,
+      "warnings": [],
+      "result": {
+        "mizuki": "loss",
+        "webgpt": "win"
+      },
+      "scv_at_window_start": 48,
+      "scv_from_start_remaining": 11,
+      "scv_at_window_end_including_new": 20,
+      "scv_deaths": 46,
+      "scv_deaths_by_killer": {
+        "Marine": 13,
+        "Marauder": 3,
+        "SiegeTankSieged": 30
+      },
+      "enemy_attributed_unit_and_building_losses": 153,
+      "scv_at_minutes": {
+        "9": 42,
+        "10": 46,
+        "11": 22,
+        "12": 3
+      },
+      "second_base": {
+        "completed": {
+          "time": 192.991071,
+          "loop": 4323,
+          "player": 1,
+          "kind": "expansion",
+          "label": "CommandCenter",
+          "stage": "completed",
+          "unit_tag": 67108865,
+          "unit_type": "CommandCenter",
+          "x": 156,
+          "y": 41
+        },
+        "destroyed": {
+          "time": 635.133929,
+          "loop": 14227,
+          "player": 1,
+          "kind": "loss",
+          "label": "OrbitalCommand",
+          "unit_type": "OrbitalCommand",
+          "unit_tag": 67108865,
+          "victim_player": 1,
+          "victim_tag": 67108865,
+          "killer_player": 2,
+          "killer_tag": 118489092,
+          "killer_type": "SiegeTankSieged",
+          "x": 156,
+          "y": 41,
+          "stage": "destroyed"
+        },
+        "alive_at_window_end": false,
+        "lifts_in_window": []
+      },
+      "nearby_engagement_candidates": [
+        {
+          "start": 418.660714,
+          "end": 476.785714,
+          "mizuki_scv_losses": 8,
+          "attributed_losses": 71
+        },
+        {
+          "start": 524.6875,
+          "end": 594.107143,
+          "mizuki_scv_losses": 1,
+          "attributed_losses": 76
+        },
+        {
+          "start": 596.160714,
+          "end": 666.071429,
+          "mizuki_scv_losses": 37,
+          "attributed_losses": 94
+        },
+        {
+          "start": 667.098214,
+          "end": 736.696429,
+          "mizuki_scv_losses": 24,
+          "attributed_losses": 61
+        }
+      ]
+    },
+    "training": {
+      "duration_seconds": 903.035714,
+      "warnings": [],
+      "result": {
+        "mizuki": "loss",
+        "webgpt": "win"
+      },
+      "scv_at_window_start": 47,
+      "scv_from_start_remaining": 23,
+      "scv_at_window_end_including_new": 24,
+      "scv_deaths": 24,
+      "scv_deaths_by_killer": {
+        "Marine": 20,
+        "Marauder": 4
+      },
+      "enemy_attributed_unit_and_building_losses": 121,
+      "scv_at_minutes": {
+        "9": 24,
+        "10": 23,
+        "11": 24,
+        "12": 27
+      },
+      "second_base": {
+        "completed": {
+          "time": 183.660714,
+          "loop": 4114,
+          "player": 1,
+          "kind": "expansion",
+          "label": "CommandCenter",
+          "stage": "completed",
+          "unit_tag": 66584577,
+          "unit_type": "CommandCenter",
+          "x": 41,
+          "y": 19
+        },
+        "destroyed": {
+          "time": 463.839286,
+          "loop": 10390,
+          "player": 1,
+          "kind": "loss",
+          "label": "OrbitalCommand",
+          "unit_type": "OrbitalCommand",
+          "unit_tag": 66584577,
+          "victim_player": 1,
+          "victim_tag": 66584577,
+          "killer_player": 2,
+          "killer_tag": 80478211,
+          "killer_type": "Marauder",
+          "x": 41,
+          "y": 19,
+          "stage": "destroyed"
+        },
+        "alive_at_window_end": false,
+        "lifts_in_window": []
+      },
+      "nearby_engagement_candidates": [
+        {
+          "start": 408.839286,
+          "end": 409.776786,
+          "mizuki_scv_losses": 0,
+          "attributed_losses": 3
+        },
+        {
+          "start": 413.839286,
+          "end": 483.526786,
+          "mizuki_scv_losses": 21,
+          "attributed_losses": 111
+        },
+        {
+          "start": 418.258929,
+          "end": 424.151786,
+          "mizuki_scv_losses": 0,
+          "attributed_losses": 4
+        },
+        {
+          "start": 486.517857,
+          "end": 548.928571,
+          "mizuki_scv_losses": 5,
+          "attributed_losses": 58
+        },
+        {
+          "start": 557.723214,
+          "end": 626.696429,
+          "mizuki_scv_losses": 1,
+          "attributed_losses": 46
+        },
+        {
+          "start": 631.696429,
+          "end": 701.5625,
+          "mizuki_scv_losses": 0,
+          "attributed_losses": 60
+        },
+        {
+          "start": 704.642857,
+          "end": 745.267857,
+          "mizuki_scv_losses": 0,
+          "attributed_losses": 28
+        }
+      ]
+    }
+  }
+}
