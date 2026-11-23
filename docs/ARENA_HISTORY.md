@@ -48,3 +48,9 @@ RedCityLE、加速、种子 2130134702、DeepSeek 一号位、现实时间上限
 ## DeepSeek 第 7 代对 Mizuki 训练第 7 代
 
 DeepSeek 9f0967a（代码 64d8375）对 Mizuki 683ef07，RedCityLE、加速、种子 98746、DeepSeek 一号位、现实上限 15 分钟。Mizuki 在 11:08 自然获胜，启动至清理约 1:40。录像及复盘：本机 Codex 工作区 results/codex-ds-vs-mizuki-20261124-032744/match/。
+
+## Mizuki 训练第 7 代四对手复盘
+
+训练第 7 代 683ef07 在 RedCityLE、SC2 5.0.17.98745、加速、种子 98746 下补打三场，现实上限 15 分钟，均自然判定：9:04 负 AGY 第 2 代 7f20fad，15:46 负 Sol 第 3 代 cb7618d，11:01 负网页端第 2 代 42d469af。DeepSeek 同版本的 11:08 胜局沿用，不重打。
+
+[四场录像、复盘与第 8 代迭代任务](https://github.com/RICHARDwuxiaofei/Starcarft/blob/09afafbd396c7c27e59d7d15ba8c40706b0256f9/replays/mizuki-gen7-20261124/README.md)
