@@ -379,6 +379,11 @@ class CompetitiveBot(BotAI):
 
         # 5) 自然分矿。若长期攒不到 400 矿，超时后放行通用运营逻辑。
         if not self._open_cc:
+            natural_blocked = self._natural is not None and any(
+                unit.distance_to(self._natural) < 10 for unit in self.enemy_units
+            )
+            if natural_blocked:
+                return True
             if self.time >= 150 and self.minerals >= 400:
                 if self._natural is not None:
                     await self.expand_now(location=self._natural)
@@ -642,6 +647,9 @@ class CompetitiveBot(BotAI):
         for orbital in self.townhalls(UnitTypeId.ORBITALCOMMAND).ready:
             if orbital.energy < 50:
                 continue
+            # 情报空白且该扫描时，至少留 50 能量给扫描。
+            if self._scan_due() and orbital.energy < 100:
+                continue
             field = self.mineral_field.closest_to(orbital)
             self.do(orbital(AbilityId.CALLDOWNMULE_CALLDOWNMULE, field))
             self._last_mule = self.time
@@ -898,20 +906,25 @@ class CompetitiveBot(BotAI):
                 logger.info("[DeepSeek] 派出农民侦察 %s", target)
 
         # 情报空白且经济允许时扫一次敌方分矿。
-        if self.time < 300 or self.time - self._last_scan < 90:
-            return
-        if len(self._seen_enemy_structures) > 3:
+        if not self._scan_due():
             return
         for orbital in self.townhalls(UnitTypeId.ORBITALCOMMAND).ready:
             if orbital.energy < 50:
                 continue
-            if self.workers.amount < 35:
-                return
             scan_target = self._enemy_natural() or self.enemy_start_locations[0]
             self.do(orbital(AbilityId.SCANNERSWEEP_SCAN, scan_target))
             self._last_scan = self.time
             logger.info("[DeepSeek] 扫描敌方分矿 %s", scan_target)
             return
+
+    def _scan_due(self) -> bool:
+        """是否需要扫描补情报：5 分钟后、90 秒没扫、建筑记忆很少。"""
+        return (
+            self.time >= 300
+            and self.time - self._last_scan >= 90
+            and len(self._seen_enemy_structures) <= 3
+            and self.workers.amount >= 35
+        )
 
     def _enemy_natural(self) -> Point2 | None:
         enemy_start = self.enemy_start_locations[0]
