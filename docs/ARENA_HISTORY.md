@@ -44,3 +44,7 @@ Sol 第 3 代 cb7618d 对 AGY 第 2 代 7f20fad。RedCityLE、加速、种子 67
 ## DeepSeek 第 7 代对 Sol 第 3 代
 
 RedCityLE、加速、种子 2130134702、DeepSeek 一号位、现实时间上限 15 分钟。Sol cb7618d 在 9:37 自然获胜。DeepSeek 第 7 代代码 64d8375、记录 9f0967a，58 项离线测试通过。6:25.7，DeepSeek 人口 64/70，军队价值 950 矿、150 气，库存 60 矿；Sol 为 68/78、1600 矿、600 气。录像和复盘：本机 Codex 工作区 results/codex-ds-gen7-vs-sol-gen3-20261124-032519/match/。
+
+## DeepSeek 第 7 代对 Mizuki 训练第 7 代
+
+DeepSeek 9f0967a（代码 64d8375）对 Mizuki 683ef07，RedCityLE、加速、种子 98746、DeepSeek 一号位、现实上限 15 分钟。Mizuki 在 11:08 自然获胜，启动至清理约 1:40。录像及复盘：本机 Codex 工作区 results/codex-ds-vs-mizuki-20261124-032744/match/。
