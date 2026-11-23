@@ -561,9 +561,9 @@ class CompetitiveBot(BotAI):
                 return True
             self._last_open_build_try = self.time
             self._open_rax_at = self.time
-            if await self.build(
+            if await self._build_with_addon_space(
                 UnitTypeId.BARRACKS,
-                near=anchor,
+                anchor,
                 max_distance=14 if self._open_alt_placement else 10,
                 random_alternative=self._open_alt_placement,
             ):
@@ -934,6 +934,52 @@ class CompetitiveBot(BotAI):
                 count += 1
         return count
 
+    async def _build_with_addon_space(
+        self,
+        unit_type: UnitTypeId,
+        near: Point2,
+        max_distance: int = 14,
+        random_alternative: bool = False,
+    ) -> bool:
+        """优先在“附件位也空着”的落点造生产建筑。
+
+        gen7 两场里第一座兵营都落在 (28,156)，附件位 (30.5,155.5) 正好在主基地
+        (32,156) 的 5x5 占地里；第二座 (30,160) 的附件位压在补给站 (33,161) 上。
+        结果科技实验室只能挂到 4:52–5:04 才完工的第三座兵营上。
+
+        这里用 burnysc2 自带的 `find_placement(..., addon_place=True)`（它按
+        `position.offset((2.5, -0.5))` 过滤附件位）先找带附件空位的位置，再在附近
+        下单；找不到就退回原来的普通落点，不改变原有行为。
+        """
+        finder = getattr(self, "find_placement", None)
+        spot = None
+        if finder is not None:
+            try:
+                spot = await finder(
+                    unit_type,
+                    near=near,
+                    max_distance=max_distance,
+                    addon_place=True,
+                )
+            except (AttributeError, KeyError, TypeError, ValueError):
+                spot = None
+        if spot is not None:
+            built = await self.build(
+                unit_type,
+                near=spot,
+                max_distance=4,
+                random_alternative=random_alternative,
+                placement_step=1,
+            )
+            if built:
+                return True
+        return await self.build(
+            unit_type,
+            near=near,
+            max_distance=max_distance,
+            random_alternative=random_alternative,
+        )
+
     async def _manage_structures(self) -> None:
         """按时间目标补生产/科技建筑；资源紧张或挨打时降低优先级。"""
         if not self.townhalls:
@@ -970,12 +1016,18 @@ class CompetitiveBot(BotAI):
             if not self.can_afford(unit_type):
                 continue
             anchor = self._main_base().position
-            built = await self.build(
-                unit_type,
-                near=anchor,
-                max_distance=14,
-                random_alternative=False,
-            )
+            if unit_type in ADDON_TYPES:
+                # 兵营/工厂/星港要留附件位；否则科技实验室与反应堆永远挂不上。
+                built = await self._build_with_addon_space(
+                    unit_type, anchor, max_distance=14
+                )
+            else:
+                built = await self.build(
+                    unit_type,
+                    near=anchor,
+                    max_distance=14,
+                    random_alternative=False,
+                )
             self._last_structure_build = self.time
             if built is None:
                 logger.info("[DeepSeek] %s 放置失败，附近没有空位", unit_type.name)
@@ -995,12 +1047,10 @@ class CompetitiveBot(BotAI):
         """尝试给一栋生产建筑挂附件；返回 True 表示本帧已处理过附件。"""
         if building.add_on_tag != 0:
             return False
-        # 生产中的建筑也要能排队挂附件：旧实现要求 `is_idle`，而两场 Sol 录像里
-        # 兵营几乎一直在训练，结果 8:16 局 4 座兵营全程 0 附件（没有兴奋剂/盾牌，
-        # 也没有掠夺者），8:40 局 4 座以上兵营只有 1 个科技实验室 + 1 个反应堆。
-        # 队列太深（>1）时先让当前产能跑完，避免附件排在很后面。
-        if not building.is_idle and len(getattr(building, "orders", ()) or ()) > 1:
-            return False
+        # 生产中的建筑也要能排队挂附件：gen7 的版本要求“空闲或队列 ≤1”，
+        # 而 `train(MARINE, 2)` 让兵营队列常年是 2 —— 结果两场 4–5 座兵营
+        # 全程 0 个反应堆（对手各 4 个），产能只有一半，掠夺者/兴奋剂也起不来。
+        # 客户端若拒绝就由 `_issue` 失败退避 10 秒，不会退化成每帧提交。
         if self._addon_blocked_until.get(building.tag, 0) > self.time:
             return False
         ordered = self._addon_orders.get(building.tag)
@@ -1179,12 +1229,20 @@ class CompetitiveBot(BotAI):
         if not barracks:
             return
         # 还没有科技实验室时，先让附件开工，否则兴奋剂/掠夺者永远补不上。
-        # 420 秒后不再为此阻塞产能，避免附件位被挤占时兵营空转。
+        # 但要有限度：只有“附件确实已经下单/在建”时才暂停产能。
+        # gen7 对 Sol 与 Mizuki 两场里，首座兵营 51.7/50.2 秒就绪，可它的附件位
+        # 被主基地占住，第一座能挂附件的兵营 4:52–5:04 才完工；旧门闸把兵营训练
+        # 锁死 200+ 秒，同期存款 1005 矿/404 气（对 Sol）、675 矿/587 气（对 Mizuki），
+        # 军队价值一直是 0。附件没能挂上时，出兵不能跟着一起停。
+        techlab_in_progress = self.structures(
+            UnitTypeId.BARRACKSTECHLAB
+        ).amount > 0 or self._addon_planned(UnitTypeId.BARRACKSTECHLAB)
         if (
             not self.techlab_tags
             and self.time < 420
             and any(b.add_on_tag == 0 for b in barracks)
             and self.minerals >= 50
+            and techlab_in_progress
         ):
             return
         if self.minerals >= 100:

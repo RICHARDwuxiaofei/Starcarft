@@ -473,17 +473,25 @@ def test_addon_queues_behind_current_production():
     assert [c.ability for c in builds] == [UnitTypeId.BARRACKSTECHLAB]
 
 
-def test_addon_waits_when_production_queue_is_deep():
+def test_busy_barracks_can_queue_reactor():
+    """队列里有 2 个兵也要能挂反应堆。
+
+    gen7 对 Sol/Mizuki 两场：4–5 座兵营全程 0 个反应堆（对手各 4 个），
+    因为 `train(MARINE, 2)` 让队列常年是 2，而旧检查要求队列 ≤1。
+    """
     world = FakeBotWorld(module)
-    world.time_seconds = 150
+    world.time_seconds = 400
     world.bot._opening_done = True
     world.bot._open_cc = True
+    world.bot.techlab_tags = {9000}
     rax = world.add_structure(UnitTypeId.BARRACKS, (44, 44), tag=104, is_idle=False)
     rax.orders = [object(), object()]
 
     world.run(world.bot._manage_addons())
 
-    assert [c for c in world.commands if c.kind == "build"] == []
+    builds = [c for c in world.commands if c.kind == "build"]
+    assert [c.unit for c in builds] == [rax]
+    assert [c.ability for c in builds] == [UnitTypeId.BARRACKSREACTOR]
 
 
 def test_addon_order_rejection_backs_off():
@@ -997,3 +1005,122 @@ def test_supply_manager_allows_third_depot_when_banked():
 
     world_poor.run(world_poor.bot._manage_supply())
     assert world_poor.builds == []
+
+
+# ---------------------------------------------------------------------------
+# 本轮复盘驱动（gen7 对 Sol 3 / Mizuki 7）：产能门闸与附件位
+# ---------------------------------------------------------------------------
+
+
+def _three_ready_barracks(world):
+    for index in range(3):
+        world.add_structure(
+            UnitTypeId.BARRACKS, (44 + index * 3, 44), add_on_tag=0, is_idle=True
+        )
+
+
+def test_army_production_no_longer_deadlocks_without_techlab():
+    """没有科技实验室、也没有附件在下单时，兵营必须继续出兵。
+
+    gen7 两场：首座兵营 51.7/50.2 秒就绪，但附件位被主基地/补给站占住，
+    第一座带附件的兵营 4:52–5:04 才完工；旧门闸把训练锁死 200+ 秒，
+    军队价值一直是 0，而存款是 1005 矿 / 675 矿。
+    """
+    world = FakeBotWorld(module)
+    world.time_seconds = 300
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.minerals = 400
+    world.bot.supply_left = 5
+    _three_ready_barracks(world)
+    calls: list = []
+    world.bot.train = lambda *args, **kwargs: calls.append(args) or 1
+
+    world.bot._manage_army_production()
+
+    assert calls, "附件没挂上时也不能让兵营空转"
+
+
+def test_army_production_waits_while_techlab_is_under_construction():
+    world = FakeBotWorld(module)
+    world.time_seconds = 300
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.minerals = 400
+    world.bot.supply_left = 5
+    _three_ready_barracks(world)
+    world.add_structure(
+        UnitTypeId.BARRACKSTECHLAB, (46, 44), is_ready=False, build_progress=0.4
+    )
+    calls: list = []
+    world.bot.train = lambda *args, **kwargs: calls.append(args) or 1
+
+    world.bot._manage_army_production()
+
+    # 附件真的在建时再等，保证第一批兵能带掠夺者/兴奋剂。
+    assert calls == []
+
+
+def test_army_production_waits_when_techlab_was_just_ordered():
+    world = FakeBotWorld(module)
+    world.time_seconds = 300
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.minerals = 400
+    world.bot.supply_left = 5
+    _three_ready_barracks(world)
+    world.bot._addon_orders[123] = (UnitTypeId.BARRACKSTECHLAB, 295)
+    calls: list = []
+    world.bot.train = lambda *args, **kwargs: calls.append(args) or 1
+
+    world.bot._manage_army_production()
+
+    assert calls == []
+
+
+def test_structures_place_barracks_where_addon_fits():
+    world = FakeBotWorld(module)
+    world.time_seconds = 200
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.minerals = 400
+    spot = Point2((44, 44))
+    world.find_placement_result = spot
+
+    world.run(world.bot._manage_structures())
+
+    assert world.placement_searches
+    assert world.placement_searches[-1][1] is True  # addon_place=True
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+    assert world.builds[-1][1]["near"] == spot
+
+
+def test_barracks_placement_falls_back_without_addon_spot():
+    world = FakeBotWorld(module)
+    world.time_seconds = 200
+    world.bot._opening_done = True
+    world.bot._open_cc = True
+    world.bot.minerals = 400
+    world.find_placement_result = None
+
+    world.run(world.bot._manage_structures())
+
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+    assert world.builds[-1][1]["near"] == Point2((50, 50))
+
+
+def test_opening_barracks_uses_addon_aware_placement():
+    world = FakeBotWorld(module)
+    world.time_seconds = 20
+    world.bot._open_depot1 = True
+    world.bot.supply_used = 15
+    world.bot.supply_left = 10
+    world.bot.minerals = 200
+    spot = Point2((46, 44))
+    world.find_placement_result = spot
+
+    world.run(world.bot._manage_opening())
+
+    assert [b[0] for b in world.builds] == [UnitTypeId.BARRACKS]
+    assert world.builds[-1][1]["near"] == spot
+    assert world.bot._open_rax is True

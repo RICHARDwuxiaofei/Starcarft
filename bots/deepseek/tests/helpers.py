@@ -186,6 +186,9 @@ class FakeBotWorld:
         self.geysers = FakeUnits([])
         self.blocked_slots: set[tuple[float, float]] = set()
         self.placement_queries: list[tuple[object, tuple[float, float]]] = []
+        # find_placement 的假实现：默认返回 None（走普通落点），需要时由用例注入坐标。
+        self.placement_searches: list[tuple[object, bool, tuple[float, float]]] = []
+        self.find_placement_result = None
         self._configure()
         self.time_seconds = 0.0
 
@@ -235,6 +238,7 @@ class FakeBotWorld:
         bot.build = self._build
         bot.expand_now = self._expand_now
         bot.can_place_single = self._can_place_single
+        bot.find_placement = self._find_placement
 
     @property
     def time_seconds(self) -> float:
@@ -305,6 +309,20 @@ class FakeBotWorld:
         key = (round(position.x, 1), round(position.y, 1))
         self.placement_queries.append((building, key))
         return key not in self.blocked_slots
+
+    async def _find_placement(
+        self,
+        building,
+        near,
+        max_distance=20,
+        random_alternative=True,
+        placement_step=2,
+        addon_place=False,
+    ):
+        self.placement_searches.append(
+            (building, addon_place, (round(near.x, 1), round(near.y, 1)))
+        )
+        return self.find_placement_result
 
     # ---- 场景辅助 -------------------------------------------------------
 
