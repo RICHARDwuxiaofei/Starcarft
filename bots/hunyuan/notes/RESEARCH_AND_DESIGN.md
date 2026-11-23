@@ -122,3 +122,46 @@
 - 关键场景离线测试：用桩对象（fake state/units）驱动 `on_step`，验证
   开局下单、补给、SCV 生产、扩张触发、被骚扰后恢复、首轮进攻失败后继续运营等逻辑分支。
 - **未做**：任何真实 SC2 对局；胜绩不做声明。
+
+## 5. 客户端掉线排查（授权范围内的只读对照）
+
+### 授权范围与证据来源
+- 只读取自己 `webgpt-vs-hunyuan` 对局目录的 `console.log` / `result.json`；
+  没有查看 `webgpt-vs-deepseek` 或其他参赛者的目录。
+- 对照只读取 `b301d0b9b8c230b2f5ca2ba82b962b167f704bfd:bots/webgpt/` 中与
+  **客户端初始化 / 推进步长 / API 请求提交与等待**有关的文件（`run.py`、`runtime.py`、
+  `bot.py` 的 on_start、`config.py` 的请求预算、macro 中查询次数上限），不取其战术实现。
+- 事实：本局 hunyuan 客户端（端口 62300）在 156.52 游戏秒（约 2:37）断连；
+  日志在 1:53 记录到“敌方单位出现在我方基地附近”；结束后 `main.run_game`
+  收到 `TimeoutError` + `ClientConnectionResetError`，未形成正式胜负。
+
+### 可疑点与排除方法
+1. **每帧无界的 API 查询突发（首要）**。原实现 `_do_expand()` 调用库 `expand_now()`：
+   `get_next_expansion()` 对每个扩张点执行一次 `await client.query_pathing()`，随后
+   `find_placement(placement_step=1, max_distance=10)` 最多再发约 10 批放置查询；
+   同时 `plan()` 一帧可输出多个建造订单，每个 `build()` 内部最多 6 批放置查询。
+   `b301d0b` 的兼容实现把 pathing 查询限制为 6 个候选点、把 `find_placement` 调用
+   限制为每步 4 次（`max_placement_queries`），并且从不使用 `expand_now()`。
+   **修复**：扩张改为纯几何选点（零 pathing RPC）+ 半径 5 的 `find_placement`；
+   每步最多 1 次建造/扩张；普通建筑查询半径从 12 降到 4。
+2. **同帧重复/冲突指令**。战斗单位每帧全体重发 `attack`/`move`，防守时 SCV 同时收到
+   `attack` 与 `gather`。兼容实现通过 `unit_command_uses_self_do=True` 把所有命令交给
+   `CommandBus` 统一仲裁（一单位一帧一主命令 + 0.65 秒重复命令抑制）。
+   **修复**：不改动库级 self_do 模式（避免影响 `build()`/`distribute_workers()`），
+   在适配层加等价的本地仲裁：一单位一步一指令 + 0.75 秒同名指令冷却。
+3. **跨图气井指令**：`_free_geyser()` 原来会选到任何可见气井，可能让 SCV 跨图造精炼厂。
+   **修复**：只选己方基地 14 距离内的气井。
+4. **步长差异（基本排除）**：兼容实现在 `on_start` 显式设置 `client.game_step = 4`；
+   本场日志 877 步 / 156.52 游戏秒也正好是 game_step=4，说明步长并非直接差异。
+   仍显式固定为 4 并记录旧值，便于确认。
+
+### 诊断埋点
+`HUNYUAN_DIAG_PATH`（默认系统临时目录 `hunyuan_sc2_diag.jsonl`）记录 start/frame/
+expand_attempt/build_error/expand_error/end 事件，含每步指令数、建造次数、放置请求数、
+pathing 请求数、失败次数与最后错误。下一场重点看掉线前最后一个 `frame` 行的
+`commands` / `placement_queries` 以及是否有 `build_error`、`expand_error`。
+
+### 仍未验证
+真实对局仍未由本方启动；上述修复是降低已知风险，不能宣称已经定位为唯一根因。
+需要在下一场用诊断日志确认：掉线前是否仍出现查询/指令峰值，或是否在某个具体
+`build_error`/`expand_error` 之后立刻发生。
