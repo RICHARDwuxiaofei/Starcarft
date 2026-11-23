@@ -64,8 +64,17 @@ PENDING_KINDS = {
 # --- API request budgets (compatibility, not strategy) -----------------------
 GAME_STEP = 4                     # same as burnysc2 Client default and webgpt b301d0b
 MAX_BUILDS_PER_STEP = 1           # at most one placement-building attempt per step
-BUILD_QUERY_RADIUS = 4            # find_placement radius for ordinary buildings
-EXPANSION_QUERY_RADIUS = 5        # find_placement radius for a command centre
+# A Command Center footprint is 5x5 and a Supply Depot is 3x3, so a depot
+# centred 2 tiles from the CC overlaps it. A radius of 4 (the old setting)
+# therefore tried only overlapping positions and always returned None.
+# Step 4 keeps the request count bounded: radii 4 and 8 = 2 placement batches.
+BUILD_QUERY_RADIUS = 12
+BUILD_PLACEMENT_STEP = 4
+BUILD_QUERY_BUDGET = 3            # one can_place_single + two placement batches
+EXPANSION_QUERY_RADIUS = 8
+EXPANSION_PLACEMENT_STEP = 4
+EXPANSION_QUERY_BUDGET = 2        # one can_place_single + one placement batch
+FAILED_BUILD_COOLDOWN = 2.0       # stop one failing kind from monopolising the build slot
 COMMAND_COOLDOWN = 0.75           # seconds of game time before repeating an identical order
 DIAG_EVERY_STEPS = 25             # ~4.5 game seconds at game_step=4
 
@@ -94,6 +103,7 @@ class CompetitiveBot(BotAI):
         }
         self._peak_commands: int = 0
         self._peak_placement: int = 0
+        self._last_failed_build: dict[str, float] = {}
         self._diag_error: str = ""
         default_diag = Path(tempfile.gettempdir()) / "hunyuan_sc2_diag.jsonl"
         self._diag_path = Path(os.environ.get("HUNYUAN_DIAG_PATH", str(default_diag)))
@@ -169,13 +179,21 @@ class CompetitiveBot(BotAI):
             or commands > 12
             or placement > 4
         ):
+            order_counts: dict[str, int] = {}
+            for order in orders:
+                label = order.kind if not order.unit else f"{order.kind}:{order.unit}"
+                order_counts[label] = order_counts.get(label, 0) + 1
             self._diag(
                 "frame",
                 iteration=iteration,
                 commands=commands,
+                actions_queued=len(self.actions),
                 builds=self._frame_api["builds"],
                 placement_queries=placement,
                 pathing_queries=self._frame_api["pathing"],
+                orders=order_counts,
+                workers=len(self.workers),
+                supply=f"{int(self.supply_used)}/{int(self.supply_cap)}",
                 stance=self.memory.stance,
                 failed_placements=self.failed_placements,
                 last_error=self.last_placement_error[:160],
@@ -392,60 +410,100 @@ class CompetitiveBot(BotAI):
         unit_type = UNIT_IDS.get(order.unit)
         if unit_type is None:
             return
+        # A placement that keeps failing must not consume the only build slot
+        # forever; give other building kinds a chance after a short pause.
+        if self.time - self._last_failed_build.get(order.unit, -1e9) < FAILED_BUILD_COOLDOWN:
+            return
         near = self._near(order.near)
         self._frame_api["builds"] += 1
-        # find_placement issues one can_place_single plus one placement batch
-        # for each radius step; with BUILD_QUERY_RADIUS=4 and step=2 that is 2.
-        self._frame_api["placement"] += 2
+        gas = unit_type == U.REFINERY
+        queries = 0 if gas else BUILD_QUERY_BUDGET
+        self._frame_api["placement"] += queries
+        actions_before = len(self.actions)
+        accepted = False
+        reason = ""
         try:
-            if unit_type == U.REFINERY:
+            if gas:
                 geyser = self._free_geyser(near)
                 if geyser is None:
-                    return
-                # Gas structures need the geyser unit, not a point. Refineries
-                # skip find_placement inside burnysc2, so no query is sent.
-                self._frame_api["placement"] -= 2
-                await self.build(unit_type, near=geyser)
+                    reason = "no_free_geyser"
+                else:
+                    # Gas structures need the geyser unit, not a point.
+                    accepted = bool(await self.build(unit_type, near=geyser))
             else:
-                await self.build(
-                    unit_type,
-                    near=near,
-                    max_distance=BUILD_QUERY_RADIUS,
-                    placement_step=2,
-                    random_alternative=False,
+                accepted = bool(
+                    await self.build(
+                        unit_type,
+                        near=near,
+                        max_distance=BUILD_QUERY_RADIUS,
+                        placement_step=BUILD_PLACEMENT_STEP,
+                        random_alternative=False,
+                    )
                 )
         except Exception as exc:  # noqa: BLE001 - placement queries can fail on contested maps; never crash a match
             self.failed_placements += 1
             self.last_placement_error = f"build {order.unit}: {exc}"
+            reason = f"exception: {exc}"[:160]
             self._diag("build_error", kind=order.unit, error=str(exc)[:160])
+        if not accepted:
+            self._last_failed_build[order.unit] = self.time
+            if not reason:
+                reason = "no_placement_or_worker"
+        self._diag(
+            "build_attempt",
+            kind=order.unit,
+            near=order.near or "main",
+            accepted=accepted,
+            queued=len(self.actions) - actions_before,
+            queries=queries,
+            reason=reason,
+        )
 
     async def _do_expand(self) -> None:
         if (
             self._frame_api.get("builds", 0) >= MAX_BUILDS_PER_STEP
             or self.already_pending(U.COMMANDCENTER)
+            or self.time - self._last_failed_build.get("COMMANDCENTER", -1e9) < FAILED_BUILD_COOLDOWN
         ):
             return
         location = self._next_expansion()
         if location is None:
             return
         self._frame_api["builds"] += 1
-        # Two placement steps (distance 2 and 4) plus the initial probe.
-        self._frame_api["placement"] += 3
-        self._diag("expand_attempt", x=round(location.x, 1), y=round(location.y, 1))
+        self._frame_api["placement"] += EXPANSION_QUERY_BUDGET
+        actions_before = len(self.actions)
+        accepted = False
+        reason = ""
         try:
             # Deliberately NOT expand_now(): its get_next_expansion() sends a
             # pathing query for every expansion on the map.
-            await self.build(
-                U.COMMANDCENTER,
-                near=location,
-                max_distance=EXPANSION_QUERY_RADIUS,
-                placement_step=2,
-                random_alternative=False,
+            accepted = bool(
+                await self.build(
+                    U.COMMANDCENTER,
+                    near=location,
+                    max_distance=EXPANSION_QUERY_RADIUS,
+                    placement_step=EXPANSION_PLACEMENT_STEP,
+                    random_alternative=False,
+                )
             )
         except Exception as exc:  # noqa: BLE001 - a blocked location must not end the match
             self.failed_placements += 1
             self.last_placement_error = f"expand: {exc}"
+            reason = f"exception: {exc}"[:160]
             self._diag("expand_error", error=str(exc)[:160])
+        if not accepted:
+            self._last_failed_build["COMMANDCENTER"] = self.time
+            if not reason:
+                reason = "no_placement_or_worker"
+        self._diag(
+            "expand_attempt",
+            x=round(location.x, 1),
+            y=round(location.y, 1),
+            accepted=accepted,
+            queued=len(self.actions) - actions_before,
+            queries=EXPANSION_QUERY_BUDGET,
+            reason=reason,
+        )
 
     def _free_geyser(self, near: Point2):
         """Nearest visible, unclaimed geyser belonging to one of our bases."""

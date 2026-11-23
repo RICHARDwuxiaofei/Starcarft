@@ -21,19 +21,23 @@ bot = CompetitiveBot()          # 无参数实例化
 - `planner.py`：纯决策核心（无 sc2 依赖），包括运营、补给、扩张、侦察、防守、进攻波次和恢复状态机。
 - `model.py`：纯数据模型（dataclass）。
 - `notes/RESEARCH_AND_DESIGN.md`：资料查阅与设计取舍（含掉线排查记录）。
-- `tests/`：37 个离线测试，覆盖入口导入、开局、补给、扩张、科技、侦察、骚扰恢复、
-  首波进攻失败恢复、三矿长局、灾难性损失恢复，以及 API 请求预算与指令去重。
+- `tests/`：41 个离线测试，覆盖入口导入、开局、补给、扩张、科技、侦察、骚扰恢复、
+  首波进攻失败恢复、三矿长局、灾难性损失恢复、API 请求预算、指令去重、
+  放置半径与建造诊断。
 
 ## API 请求预算（掉线排查后新增，不改变战术）
 
 - `on_start` 显式把 `client.game_step` 固定为 4。
-- 每步最多执行 1 次建造/扩张；普通建筑 `find_placement` 半径 4，扩张半径 5。
+- 每步最多执行 1 次建造/扩张；普通建筑 `find_placement` 半径 12 / 步长 4（3 次请求），
+  扩张半径 8 / 步长 4（2 次请求）。半径 4 曾导致补给站永远放不下，已修正。
+- 单种建造失败后 2 秒内不再重试，避免占满唯一建造槽。
 - 不再调用 `expand_now()`（其 `get_next_expansion()` 会对每个矿点发一次 `query_pathing`）；
   改为按几何距离选最近的未占矿点，零 pathing 请求。
 - 同一单位每步最多一条非排队指令，同名指令 0.75 秒内不重复下发。
 - 气井只从己方基地 14 距离内选取。
 - 诊断日志默认写到系统临时目录 `hunyuan_sc2_diag.jsonl`，可用环境变量
-  `HUNYUAN_DIAG_PATH` 覆盖；记录每步指令数、建造/放置请求数、掉线前的最后事件。
+  `HUNYUAN_DIAG_PATH` 覆盖；记录每步指令数、入队动作数、订单种类、人口/工人数、
+  建造尝试的 `accepted/queued/queries/reason` 以及掉线前的最后事件。
   写日志失败不会影响比赛。
 
 ## 离线验收（已执行）
@@ -43,7 +47,7 @@ bot = CompetitiveBot()          # 无参数实例化
 ```
 python -m py_compile bots/hunyuan/*.py bots/hunyuan/tests/*.py    # 通过
 python -m ruff check bots/hunyuan/                                # All checks passed
-python -m pytest bots/hunyuan/tests -q                            # 37 passed
+python -m pytest bots/hunyuan/tests -q                            # 41 passed
 python -c "from bots.hunyuan.bot import CompetitiveBot; CompetitiveBot()"  # 通过
 ```
 

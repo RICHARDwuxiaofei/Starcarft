@@ -165,3 +165,34 @@ pathing 请求数、失败次数与最后错误。下一场重点看掉线前最
 真实对局仍未由本方启动；上述修复是降低已知风险，不能宣称已经定位为唯一根因。
 需要在下一场用诊断日志确认：掉线前是否仍出现查询/指令峰值，或是否在某个具体
 `build_error`/`expand_error` 之后立刻发生。
+
+## 6. 第三个 SCV 后卡住：请求限流的副作用（已定位并修复）
+
+### 现象与日志证据
+- `codex-fixed-headtohead-20261124-011426/console.log` 中混元：`workers=12`（0:00）→
+  `workers=15`（1:00）→ `workers=15`（2:00），即造出 3 个 SCV 后人口卡在 15/15。
+- 自己的诊断日志 `hunyuan_sc2_diag.jsonl`：从约 17~22 秒起，每帧 `builds=1`、
+  `placement_queries=2`、`commands=0`、`failed_placements=0`，一直持续到对局结束。
+  这个组合说明：订单**已生成**、建造尝试**已发出**，但 `self.build()` 静默返回
+  `False`（既没抛异常也没把命令放进 `self.actions`），所以是"没发出"这一类。
+
+### 根因链
+1. 上一版把 `BUILD_QUERY_RADIUS` 从 12 缩到 4、`placement_step=2`。
+   `find_placement` 只探测 `range(2, 4, 2) = [2]` 这一圈。指挥中心占地 5x5、
+   补给站 3x3，中心相距 2 格必然重叠，所有候选点都被放置查询判为非法，
+   `find_placement` 返回 `None`，`self.build()` 静默返回 `False`。
+   离线复现：同一 footprint 桩下 `max_distance=4, step=2 → None`，
+   `max_distance=12, step=4 → (10, 6)`。
+2. `MAX_BUILDS_PER_STEP = 1` 使每个建造帧只有一个槽位；`plan_economy` 的
+   `build SUPPLYDEPOT` 在订单列表里排第一，失败后下一帧仍排第一，于是永远占住
+   这个槽位，精炼厂/兵营/工厂连尝试机会都没有。
+3. 没有补给站 → 人口上限 15 → 从 12 个初始 SCV 造出 3 个后彻底卡死。
+
+### 修复
+- `BUILD_QUERY_RADIUS=12`、`BUILD_PLACEMENT_STEP=4`（探测 4、8 两圈），
+  请求数仍只有 3 次（1 次 can_place_single + 2 批放置查询），不回退到无界突发。
+- 扩张同理改为半径 8 / 步长 4（2 次请求）。
+- 失败建造按类型设 2 秒冷却，防止一种订单独占唯一槽位。
+- 诊断增加 `build_attempt` 事件（accepted / queued / queries / reason）与 frame 行的
+  `orders`、`actions_queued`、`workers`、`supply`，下一场可直接区分
+  "没生成 / 生成但没入队 / 入队但未执行"。
