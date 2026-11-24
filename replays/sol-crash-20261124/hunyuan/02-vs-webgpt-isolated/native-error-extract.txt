@@ -1,0 +1,9 @@
+<BlizzardError.IssueType>Exception
+<BlizzardError.BuildNumber>B98745 (SC2.5.0.a)
+<BlizzardError.Summary> Unknown System Error 480098739
+<ErrorType>             NON-FATAL
+<GetLastError>          0
+<Set.SinceLaunchEvent>  Mismatch in texture reduction DB
+<Set.CurrentGameEvent>  Mismatch in texture reduction DB
+Unknown System Error 480098739
+Unknown System Error 480098739
