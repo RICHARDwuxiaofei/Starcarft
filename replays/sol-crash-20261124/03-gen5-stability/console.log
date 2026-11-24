@@ -1,0 +1,23 @@
+2026-11-24 13:58:07.143 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was None)
+2026-11-24 13:58:07.324 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was None)
+2026-11-24 13:58:07.324 +08:00 | INFO     | sc2.controller:create_game:50 - Creating new game
+2026-11-24 13:58:07.324 +08:00 | INFO     | sc2.controller:create_game:51 - Map:     RedCityLE
+2026-11-24 13:58:07.324 +08:00 | INFO     | sc2.controller:create_game:52 - Players: Bot CompetitiveBot(Terran), name='Sol-gen5-P1'), Bot CompetitiveBot(Terran), name='Sol-gen5-P2')
+2026-11-24 13:58:07.325 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.init_game (was Status.launched)
+2026-11-24 13:58:16.890 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.in_game (was None)
+2026-11-24 13:58:16.890 +08:00 | INFO     | sc2.main:_play_game:225 - Player 2 - Sol-gen5-P2
+2026-11-24 13:58:16.896 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.in_game (was None)
+2026-11-24 13:58:16.896 +08:00 | INFO     | sc2.main:_play_game:225 - Player 1 - Sol-gen5-P1
+2026-11-24 13:58:59.318 +08:00 | INFO     | sc2.main:_play_game:232 - Result for player 2 - Sol-gen5-P2: Tie
+2026-11-24 13:58:59.320 +08:00 | INFO     | sc2.main:_play_game:232 - Result for player 1 - Sol-gen5-P1: Tie
+2026-11-24 13:58:59.365 +08:00 | INFO     | sc2.client:save_replay:139 - Saved replay to <REPO>\results\gui\20261124-sol-gen4-selfplay\03-gen5-stability\match.SC2Replay
+2026-11-24 13:58:59.373 +08:00 | INFO     | sc2.client:save_replay:139 - Saved replay to <REPO>\results\gui\20261124-sol-gen4-selfplay\03-gen5-stability\match.SC2Replay
+2026-11-24 13:58:59.424 +08:00 | INFO     | sc2.client:save_replay:139 - Saved replay to <REPO>\results\gui\20261124-sol-gen4-selfplay\03-gen5-stability\match.SC2Replay
+2026-11-24 13:59:00.429 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was Status.in_game)
+2026-11-24 13:59:00.431 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.quit (was Status.launched)
+2026-11-24 13:59:00.431 +08:00 | INFO     | sc2.sc2process:_close_connection:243 - Closing connection at 58946...
+2026-11-24 13:59:00.431 +08:00 | INFO     | sc2.sc2process:kill_all:36 - kill_switch: Process cleanup for 2 processes
+2026-11-24 13:59:01.436 +08:00 | ERROR    | sc2.protocol:__request:54 - Cannot receive: Connection already closed.
+2026-11-24 13:59:01.437 +08:00 | ERROR    | sc2.main:_host_game:377 - Connection was closed before the game ended
+2026-11-24 13:59:01.437 +08:00 | INFO     | sc2.sc2process:_close_connection:243 - Closing connection at -1...
+2026-11-24 13:59:01.437 +08:00 | INFO     | sc2.sc2process:kill_all:36 - kill_switch: Process cleanup for 2 processes

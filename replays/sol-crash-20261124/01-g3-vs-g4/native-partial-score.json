@@ -1,0 +1,25 @@
+{
+  "method": "army_minerals + army_vespene + 50 * active_workers",
+  "build": 98745,
+  "sample_game_loop": 7040,
+  "sample_seconds_on_faster": 314.286,
+  "players": [
+    {
+      "player_id": 1,
+      "name": "Sol-gen3-P1",
+      "army_minerals": 1150,
+      "army_vespene": 525,
+      "active_workers": 32,
+      "points": 3275
+    },
+    {
+      "player_id": 2,
+      "name": "Sol-gen4-P2",
+      "army_minerals": 1000,
+      "army_vespene": 375,
+      "active_workers": 32,
+      "points": 2975
+    }
+  ],
+  "score_leader": "Sol-gen3-P1"
+}

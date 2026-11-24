@@ -1,0 +1,94 @@
+{
+  "config": {
+    "purpose": "internal_sol_full_selfplay",
+    "formal_elo": false,
+    "map": "RedCityLE",
+    "build": 98745,
+    "sc2_path": "<SC2PATH>",
+    "seed": 541124,
+    "wall_limit_seconds": 720,
+    "game_limit_seconds": 1800,
+    "deadline_utc": "2026-11-24T06:26:50.7037342+00:00",
+    "left": {
+      "path": "<REPO>\\results\\gui\\20261124-sol-gen4-selfplay\\gen5\\bot.py",
+      "revision": "980e4f47f261cc8c3ba2cb1814edd2f19879a458",
+      "generation": 5,
+      "sha256": "789c9043b3ee42e7731298921d50b235d6e49285eeaa667b6594a171f332560c"
+    },
+    "right": {
+      "path": "<REPO>\\results\\gui\\20261124-sol-gen4-selfplay\\gen5\\bot.py",
+      "revision": "980e4f47f261cc8c3ba2cb1814edd2f19879a458",
+      "generation": 5,
+      "sha256": "789c9043b3ee42e7731298921d50b235d6e49285eeaa667b6594a171f332560c"
+    }
+  },
+  "status": "disconnect",
+  "results": [],
+  "error": "AssertionError()",
+  "scores": {
+    "left": {
+      "event": "score",
+      "game_seconds": 285.04,
+      "spawn": [
+        32.5,
+        156.5
+      ],
+      "workers": 24,
+      "marine": 7,
+      "marauder": 0,
+      "tank": 3,
+      "medivac": 0,
+      "bases": 1,
+      "score": {
+        "score": 6248,
+        "total_value_units": 2775.0,
+        "total_value_structures": 2250.0,
+        "killed_value_units": 0.0,
+        "killed_value_structures": 0.0,
+        "collection_rate_minerals": 1175.0,
+        "collection_rate_vespene": 313.0
+      }
+    },
+    "right": {
+      "event": "score",
+      "game_seconds": 285.04,
+      "spawn": [
+        19.5,
+        32.5
+      ],
+      "workers": 24,
+      "marine": 10,
+      "marauder": 1,
+      "tank": 3,
+      "medivac": 0,
+      "bases": 1,
+      "score": {
+        "score": 6093,
+        "total_value_units": 2850.0,
+        "total_value_structures": 2350.0,
+        "killed_value_units": 0.0,
+        "killed_value_structures": 0.0,
+        "collection_rate_minerals": 1119.0,
+        "collection_rate_vespene": 313.0
+      }
+    }
+  },
+  "highest_macro_query_count": {
+    "left": 3,
+    "right": 5
+  },
+  "wall_seconds": 50.36,
+  "replay_files": {
+    "native-crash-partial.SC2Replay": 21486
+  },
+  "owned_clients_remaining": [],
+  "partial_replay_status": "native_crash_snapshot",
+  "native_error": {
+    "code": 480098739,
+    "build": 98745,
+    "game_loop": 6689,
+    "game_seconds": 298.62,
+    "actual_seed": 1463026627,
+    "seat": 2
+  }
+}

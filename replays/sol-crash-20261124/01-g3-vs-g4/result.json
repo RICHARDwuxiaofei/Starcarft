@@ -1,0 +1,89 @@
+{
+  "config": {
+    "purpose": "internal_sol_selfplay",
+    "formal_elo": false,
+    "map": "RedCityLE",
+    "build": 98745,
+    "sc2_path": "<SC2PATH>",
+    "seed": 541124,
+    "wall_limit_seconds": 720,
+    "game_limit_seconds": 1800,
+    "deadline_utc": "2026-11-24T06:43:35+00:00",
+    "left": {
+      "path": "<REPO>\\results\\gui\\20261124-sol-gen4-selfplay\\gen3\\bot.py",
+      "generation": 3,
+      "revision": "cb7618de9d41bf3691cdbb5ce0fc4e7d82d2f0f6",
+      "sha256": "e5ada4ffcc34e5b5125c922d88acc46e15c6b9e49e37837ce1c188e944ccb6ba"
+    },
+    "right": {
+      "path": "<REPO>\\results\\gui\\20261124-sol-gen4-selfplay\\gen4\\bot.py",
+      "generation": 4,
+      "revision": "116b65010322c307032ef9cff741f92efab4ebbf",
+      "sha256": "e09b700ba4436fdaf2b35722b6c8b3feef7b6959234730c88aa0a586ab8afc87"
+    }
+  },
+  "status": "disconnect",
+  "results": [],
+  "error": "AssertionError()",
+  "scores": {
+    "right": {
+      "event": "score",
+      "game_seconds": 315.04,
+      "spawn": [
+        32.5,
+        156.5
+      ],
+      "workers": 29,
+      "marine": 10,
+      "marauder": 1,
+      "tank": 2,
+      "medivac": 1,
+      "bases": 2,
+      "score": {
+        "score": 6786,
+        "total_value_units": 3075.0,
+        "total_value_structures": 2725.0,
+        "killed_value_units": 0.0,
+        "killed_value_structures": 0.0,
+        "collection_rate_minerals": 1063.0,
+        "collection_rate_vespene": 492.0
+      }
+    },
+    "left": {
+      "event": "score",
+      "game_seconds": 315.04,
+      "spawn": [
+        19.5,
+        32.5
+      ],
+      "workers": 29,
+      "marine": 11,
+      "marauder": 0,
+      "tank": 3,
+      "medivac": 1,
+      "bases": 2,
+      "score": {
+        "score": 6863,
+        "total_value_units": 3275.0,
+        "total_value_structures": 2575.0,
+        "killed_value_units": 100.0,
+        "killed_value_structures": 0.0,
+        "collection_rate_minerals": 951.0,
+        "collection_rate_vespene": 447.0
+      }
+    }
+  },
+  "wall_seconds": 53.11,
+  "replay_files": {
+    "native-crash-partial.SC2Replay": 21549
+  },
+  "owned_clients_remaining": [],
+  "observed_failure": "SC2 client connection closed before any terminal result.",
+  "partial_replay_status": "native_crash_snapshot",
+  "native_error": {
+    "code": 480098739,
+    "build": 98745,
+    "game_loop": 7169,
+    "actual_seed": 1804485506
+  }
+}

@@ -1,0 +1,25 @@
+2026-11-24 14:07:01.274 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was None)
+2026-11-24 14:07:01.351 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was None)
+2026-11-24 14:07:01.351 +08:00 | INFO     | sc2.controller:create_game:50 - Creating new game
+2026-11-24 14:07:01.352 +08:00 | INFO     | sc2.controller:create_game:51 - Map:     RedCityLE
+2026-11-24 14:07:01.352 +08:00 | INFO     | sc2.controller:create_game:52 - Players: Bot CompetitiveBot(Terran), name='Sol-gen5-P1'), Bot CompetitiveBot(Terran), name='Sol-gen5-P2')
+2026-11-24 14:07:01.354 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.init_game (was Status.launched)
+2026-11-24 14:07:10.952 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.in_game (was None)
+2026-11-24 14:07:10.952 +08:00 | INFO     | sc2.main:_play_game:225 - Player 1 - Sol-gen5-P1
+2026-11-24 14:07:11.045 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.in_game (was None)
+2026-11-24 14:07:11.045 +08:00 | INFO     | sc2.main:_play_game:225 - Player 2 - Sol-gen5-P2
+2026-11-24 14:07:40.882 +08:00 | ERROR    | sc2.protocol:__request:54 - Cannot receive: Connection already closed.
+2026-11-24 14:07:40.882 +08:00 | INFO     | sc2.sc2process:_close_connection:243 - Closing connection at 53351...
+2026-11-24 14:07:40.882 +08:00 | INFO     | sc2.sc2process:kill_all:36 - kill_switch: Process cleanup for 2 processes
+2026-11-24 14:07:41.385 +08:00 | ERROR    | sc2.sc2process:_clean:269 - KILLED
+2026-11-24 14:07:41.386 +08:00 | ERROR    | sc2.protocol:__request:54 - Cannot receive: Connection already closed.
+2026-11-24 14:07:41.386 +08:00 | INFO     | sc2.sc2process:_close_connection:243 - Closing connection at -1...
+2026-11-24 14:07:41.386 +08:00 | INFO     | sc2.sc2process:kill_all:36 - kill_switch: Process cleanup for 2 processes
+Traceback (most recent call last):
+  File "<REPO>\results\gui\20261124-sol-gen4-selfplay\run_sol_selfplay.py", line 164, in play
+    results = run_game(
+              ^^^^^^^^^
+  File "<REPO>\.venv\Lib\site-packages\sc2\main.py", line 529, in run_game
+    assert all(isinstance(r, Result) for r in result)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

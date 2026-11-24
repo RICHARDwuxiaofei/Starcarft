@@ -1,0 +1,24 @@
+2026-11-24 14:09:30.638 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was None)
+2026-11-24 14:09:30.639 +08:00 | INFO     | sc2.controller:create_game:50 - Creating new game
+2026-11-24 14:09:30.639 +08:00 | INFO     | sc2.controller:create_game:51 - Map:     RedCityLE
+2026-11-24 14:09:30.639 +08:00 | INFO     | sc2.controller:create_game:52 - Players: Bot CompetitiveBot(Terran), name='Sol-gen2-P1'), Bot CompetitiveBot(Terran), name='Sol-gen3-P2')
+2026-11-24 14:09:30.640 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.init_game (was Status.launched)
+2026-11-24 14:09:30.674 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was None)
+2026-11-24 14:09:41.134 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.in_game (was None)
+2026-11-24 14:09:41.134 +08:00 | INFO     | sc2.main:_play_game:225 - Player 1 - Sol-gen2-P1
+2026-11-24 14:09:41.182 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.in_game (was None)
+2026-11-24 14:09:41.183 +08:00 | INFO     | sc2.main:_play_game:225 - Player 2 - Sol-gen3-P2
+2026-11-24 14:10:56.193 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.ended (was Status.in_game)
+2026-11-24 14:10:56.203 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.ended (was Status.in_game)
+2026-11-24 14:10:56.211 +08:00 | INFO     | sc2.main:_play_game:232 - Result for player 1 - Sol-gen2-P1: Defeat
+2026-11-24 14:10:56.232 +08:00 | INFO     | sc2.main:_play_game:232 - Result for player 2 - Sol-gen3-P2: Victory
+2026-11-24 14:10:56.274 +08:00 | INFO     | sc2.client:save_replay:139 - Saved replay to <REPO>\results\gui\20261124-sol-gen4-selfplay\05-old-g2-vs-g3\match.SC2Replay
+2026-11-24 14:10:56.288 +08:00 | INFO     | sc2.client:save_replay:139 - Saved replay to <REPO>\results\gui\20261124-sol-gen4-selfplay\05-old-g2-vs-g3\match.SC2Replay
+2026-11-24 14:10:56.336 +08:00 | INFO     | sc2.client:save_replay:139 - Saved replay to <REPO>\results\gui\20261124-sol-gen4-selfplay\05-old-g2-vs-g3\match.SC2Replay
+2026-11-24 14:10:57.459 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.launched (was Status.ended)
+2026-11-24 14:10:57.461 +08:00 | INFO     | sc2.protocol:_execute:120 - Client status changed to Status.quit (was Status.launched)
+2026-11-24 14:10:57.461 +08:00 | INFO     | sc2.sc2process:_close_connection:243 - Closing connection at 61656...
+2026-11-24 14:10:57.461 +08:00 | INFO     | sc2.sc2process:kill_all:36 - kill_switch: Process cleanup for 2 processes
+2026-11-24 14:10:58.465 +08:00 | INFO     | sc2.protocol:__request:52 - Cannot receive: Game has already ended.
+2026-11-24 14:10:58.466 +08:00 | INFO     | sc2.sc2process:_close_connection:243 - Closing connection at -1...
+2026-11-24 14:10:58.466 +08:00 | INFO     | sc2.sc2process:kill_all:36 - kill_switch: Process cleanup for 2 processes

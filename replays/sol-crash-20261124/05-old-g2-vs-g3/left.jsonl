@@ -1,0 +1,120 @@
+{"event": "score", "game_seconds": 0.0, "spawn": [32.5, 156.5], "workers": 12, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 1050, "total_value_units": 600.0, "total_value_structures": 400.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 0.0, "collection_rate_vespene": 0.0}}
+{"event": "siege_contact", "game_seconds": 0.0, "tank_tags": []}
+{"event": "score", "game_seconds": 15.04, "spawn": [32.5, 156.5], "workers": 13, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 1180, "total_value_units": 650.0, "total_value_structures": 400.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 727.0, "collection_rate_vespene": 0.0}}
+{"event": "score", "game_seconds": 30.04, "spawn": [32.5, 156.5], "workers": 14, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 1370, "total_value_units": 700.0, "total_value_structures": 400.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 783.0, "collection_rate_vespene": 0.0}}
+{"event": "score", "game_seconds": 45.04, "spawn": [32.5, 156.5], "workers": 15, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 1525, "total_value_units": 750.0, "total_value_structures": 500.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 671.0, "collection_rate_vespene": 0.0}}
+{"event": "score", "game_seconds": 60.04, "spawn": [32.5, 156.5], "workers": 16, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 1715, "total_value_units": 800.0, "total_value_structures": 500.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 755.0, "collection_rate_vespene": 0.0}}
+{"event": "score", "game_seconds": 75.04, "spawn": [32.5, 156.5], "workers": 16, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 1904, "total_value_units": 850.0, "total_value_structures": 575.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 587.0, "collection_rate_vespene": 134.0}}
+{"event": "score", "game_seconds": 90.04, "spawn": [32.5, 156.5], "workers": 17, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 2129, "total_value_units": 900.0, "total_value_structures": 725.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 811.0, "collection_rate_vespene": 156.0}}
+{"event": "score", "game_seconds": 105.04, "spawn": [32.5, 156.5], "workers": 17, "marine": 1, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 2294, "total_value_units": 950.0, "total_value_structures": 725.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 895.0, "collection_rate_vespene": 156.0}}
+{"event": "score", "game_seconds": 120.04, "spawn": [32.5, 156.5], "workers": 17, "marine": 2, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 2643, "total_value_units": 1000.0, "total_value_structures": 725.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 811.0, "collection_rate_vespene": 156.0}}
+{"event": "score", "game_seconds": 135.04, "spawn": [32.5, 156.5], "workers": 18, "marine": 2, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 2900, "total_value_units": 1100.0, "total_value_structures": 900.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 783.0, "collection_rate_vespene": 246.0}}
+{"event": "score", "game_seconds": 150.04, "spawn": [32.5, 156.5], "workers": 19, "marine": 3, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 3085, "total_value_units": 1200.0, "total_value_structures": 1150.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 755.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 165.04, "spawn": [32.5, 156.5], "workers": 20, "marine": 3, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 3515, "total_value_units": 1250.0, "total_value_structures": 1150.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1007.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 180.04, "spawn": [32.5, 156.5], "workers": 21, "marine": 3, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 3809, "total_value_units": 1400.0, "total_value_structures": 1325.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 923.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 195.04, "spawn": [32.5, 156.5], "workers": 22, "marine": 4, "marauder": 0, "tank": 0, "medivac": 0, "bases": 1, "score": {"score": 3774, "total_value_units": 1500.0, "total_value_structures": 1325.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1119.0, "collection_rate_vespene": 335.0}}
+{"event": "score", "game_seconds": 210.04, "spawn": [32.5, 156.5], "workers": 23, "marine": 5, "marauder": 0, "tank": 1, "medivac": 0, "bases": 1, "score": {"score": 4513, "total_value_units": 1875.0, "total_value_structures": 1325.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1091.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 225.04, "spawn": [32.5, 156.5], "workers": 24, "marine": 5, "marauder": 0, "tank": 1, "medivac": 0, "bases": 1, "score": {"score": 4848, "total_value_units": 1925.0, "total_value_structures": 1425.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1091.0, "collection_rate_vespene": 335.0}}
+{"event": "score", "game_seconds": 240.04, "spawn": [32.5, 156.5], "workers": 24, "marine": 6, "marauder": 0, "tank": 1, "medivac": 0, "bases": 1, "score": {"score": 5198, "total_value_units": 1975.0, "total_value_structures": 1425.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 979.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 255.04, "spawn": [32.5, 156.5], "workers": 24, "marine": 7, "marauder": 0, "tank": 1, "medivac": 0, "bases": 1, "score": {"score": 5458, "total_value_units": 2025.0, "total_value_structures": 1825.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 979.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 270.04, "spawn": [32.5, 156.5], "workers": 24, "marine": 8, "marauder": 0, "tank": 2, "medivac": 0, "bases": 2, "score": {"score": 5822, "total_value_units": 2350.0, "total_value_structures": 2225.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1035.0, "collection_rate_vespene": 335.0}}
+{"event": "score", "game_seconds": 285.04, "spawn": [32.5, 156.5], "workers": 26, "marine": 9, "marauder": 0, "tank": 2, "medivac": 1, "bases": 2, "score": {"score": 6126, "total_value_units": 2700.0, "total_value_structures": 2500.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1175.0, "collection_rate_vespene": 313.0}}
+{"event": "score", "game_seconds": 300.04, "spawn": [32.5, 156.5], "workers": 28, "marine": 10, "marauder": 0, "tank": 3, "medivac": 1, "bases": 2, "score": {"score": 6630, "total_value_units": 3125.0, "total_value_structures": 2575.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1147.0, "collection_rate_vespene": 358.0}}
+{"event": "score", "game_seconds": 315.04, "spawn": [32.5, 156.5], "workers": 29, "marine": 11, "marauder": 0, "tank": 3, "medivac": 1, "bases": 2, "score": {"score": 6947, "total_value_units": 3275.0, "total_value_structures": 2575.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 979.0, "collection_rate_vespene": 470.0}}
+{"event": "score", "game_seconds": 330.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 11, "marauder": 0, "tank": 3, "medivac": 1, "bases": 2, "score": {"score": 7337, "total_value_units": 3325.0, "total_value_structures": 2675.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1119.0, "collection_rate_vespene": 470.0}}
+{"event": "score", "game_seconds": 345.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 12, "marauder": 0, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 7740, "total_value_units": 3575.0, "total_value_structures": 2825.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1063.0, "collection_rate_vespene": 515.0}}
+{"event": "score", "game_seconds": 360.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 15, "marauder": 0, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 8125, "total_value_units": 3725.0, "total_value_structures": 2825.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1091.0, "collection_rate_vespene": 492.0}}
+{"event": "score", "game_seconds": 375.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 17, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 8509, "total_value_units": 3950.0, "total_value_structures": 3050.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 979.0, "collection_rate_vespene": 492.0}}
+{"event": "score", "game_seconds": 390.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 19, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 8894, "total_value_units": 4050.0, "total_value_structures": 3300.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1007.0, "collection_rate_vespene": 492.0}}
+{"event": "score", "game_seconds": 405.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 22, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 9189, "total_value_units": 4300.0, "total_value_structures": 3300.0, "killed_value_units": 0.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1147.0, "collection_rate_vespene": 470.0}}
+{"event": "score", "game_seconds": 420.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 8, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 8763, "total_value_units": 4500.0, "total_value_structures": 3500.0, "killed_value_units": 975.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1119.0, "collection_rate_vespene": 492.0}}
+{"event": "score", "game_seconds": 435.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 13, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 9262, "total_value_units": 4750.0, "total_value_structures": 3500.0, "killed_value_units": 975.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1371.0, "collection_rate_vespene": 515.0}}
+{"event": "score", "game_seconds": 450.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 19, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 9751, "total_value_units": 5050.0, "total_value_structures": 3500.0, "killed_value_units": 975.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1567.0, "collection_rate_vespene": 470.0}}
+{"event": "score", "game_seconds": 465.04, "spawn": [32.5, 156.5], "workers": 32, "marine": 24, "marauder": 1, "tank": 3, "medivac": 2, "bases": 2, "score": {"score": 10137, "total_value_units": 5300.0, "total_value_structures": 3500.0, "killed_value_units": 975.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1595.0, "collection_rate_vespene": 470.0}}
+{"event": "score", "game_seconds": 480.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 25, "marauder": 1, "tank": 3, "medivac": 3, "bases": 2, "score": {"score": 10414, "total_value_units": 5750.0, "total_value_structures": 3600.0, "killed_value_units": 975.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1427.0, "collection_rate_vespene": 447.0}}
+{"event": "score", "game_seconds": 495.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 16, "marauder": 1, "tank": 2, "medivac": 3, "bases": 2, "score": {"score": 9782, "total_value_units": 6125.0, "total_value_structures": 3600.0, "killed_value_units": 1750.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1399.0, "collection_rate_vespene": 425.0}}
+{"event": "score", "game_seconds": 510.04, "spawn": [32.5, 156.5], "workers": 32, "marine": 21, "marauder": 1, "tank": 2, "medivac": 4, "bases": 2, "score": {"score": 10288, "total_value_units": 6575.0, "total_value_structures": 3600.0, "killed_value_units": 1750.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1483.0, "collection_rate_vespene": 447.0}}
+{"event": "score", "game_seconds": 525.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 27, "marauder": 1, "tank": 2, "medivac": 4, "bases": 2, "score": {"score": 10746, "total_value_units": 6875.0, "total_value_structures": 3600.0, "killed_value_units": 1750.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1315.0, "collection_rate_vespene": 425.0}}
+{"event": "score", "game_seconds": 540.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 20, "marauder": 1, "tank": 0, "medivac": 4, "bases": 2, "score": {"score": 10057, "total_value_units": 7175.0, "total_value_structures": 3600.0, "killed_value_units": 2000.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1539.0, "collection_rate_vespene": 447.0}}
+{"event": "score", "game_seconds": 555.04, "spawn": [32.5, 156.5], "workers": 31, "marine": 15, "marauder": 1, "tank": 0, "medivac": 3, "bases": 2, "score": {"score": 9874, "total_value_units": 7425.0, "total_value_structures": 3600.0, "killed_value_units": 2750.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1567.0, "collection_rate_vespene": 470.0}}
+{"event": "score", "game_seconds": 570.04, "spawn": [32.5, 156.5], "workers": 32, "marine": 4, "marauder": 0, "tank": 0, "medivac": 4, "bases": 2, "score": {"score": 9386, "total_value_units": 7925.0, "total_value_structures": 3600.0, "killed_value_units": 3150.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1567.0, "collection_rate_vespene": 447.0}}
+{"event": "score", "game_seconds": 585.04, "spawn": [32.5, 156.5], "workers": 32, "marine": 2, "marauder": 0, "tank": 0, "medivac": 4, "bases": 2, "score": {"score": 9348, "total_value_units": 8275.0, "total_value_structures": 3600.0, "killed_value_units": 3200.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1455.0, "collection_rate_vespene": 447.0}}
+{"event": "siege_contact", "game_seconds": 596.12, "tank_tags": [4375707649]}
+{"event": "defensive_move", "game_seconds": 596.83, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 597.54, "tank_tags": [4375707649, 4380164098]}
+{"event": "defensive_move", "game_seconds": 599.33, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 599.69, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 599.87, "tank_tags": [4375707649, 4380164098]}
+{"event": "score", "game_seconds": 600.04, "spawn": [32.5, 156.5], "workers": 29, "marine": 4, "marauder": 0, "tank": 0, "medivac": 2, "bases": 2, "score": {"score": 8812, "total_value_units": 8625.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1315.0, "collection_rate_vespene": 447.0}}
+{"event": "defensive_move", "game_seconds": 600.04, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 600.76, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 601.47, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 601.83, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 602.01, "tank_tags": [4375707649, 4380164098]}
+{"event": "defensive_move", "game_seconds": 602.19, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 602.9, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 603.26, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 603.97, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 604.69, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 605.4, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 606.12, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 606.47, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 606.83, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 607.9, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 608.44, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 608.62, "tank_tags": [4375707649, 4380164098]}
+{"event": "defensive_move", "game_seconds": 608.62, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 609.33, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 610.4, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 611.83, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 613.26, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 614.69, "points": [[34.95, 151.1]]}
+{"event": "score", "game_seconds": 615.04, "spawn": [32.5, 156.5], "workers": 28, "marine": 2, "marauder": 0, "tank": 0, "medivac": 1, "bases": 2, "score": {"score": 8400, "total_value_units": 8925.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1343.0, "collection_rate_vespene": 380.0}}
+{"event": "defensive_move", "game_seconds": 615.4, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 616.12, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 617.19, "tank_tags": [4375707649]}
+{"event": "defensive_move", "game_seconds": 617.19, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 617.37, "tank_tags": [4375707649, 4380164098]}
+{"event": "defensive_move", "game_seconds": 617.54, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 618.97, "points": [[34.95, 151.1]]}
+{"event": "siege_contact", "game_seconds": 619.33, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 619.51, "tank_tags": [4375707649, 4380164098]}
+{"event": "defensive_move", "game_seconds": 620.4, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 620.76, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 621.83, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 623.26, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 623.97, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 624.69, "points": [[34.95, 151.1]]}
+{"event": "defensive_move", "game_seconds": 625.4, "points": [[34.95, 151.1]]}
+{"event": "score", "game_seconds": 630.04, "spawn": [32.5, 156.5], "workers": 30, "marine": 0, "marauder": 0, "tank": 0, "medivac": 0, "bases": 2, "score": {"score": 7983, "total_value_units": 9275.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 1259.0, "collection_rate_vespene": 425.0}}
+{"event": "siege_contact", "game_seconds": 630.22, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 630.4, "tank_tags": [4375707649, 4380164098]}
+{"event": "siege_contact", "game_seconds": 631.47, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 641.65, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 643.44, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 644.51, "tank_tags": [4375707649]}
+{"event": "score", "game_seconds": 645.04, "spawn": [32.5, 156.5], "workers": 13, "marine": 0, "marauder": 0, "tank": 0, "medivac": 1, "bases": 1, "score": {"score": 6235, "total_value_units": 9625.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 391.0, "collection_rate_vespene": 246.0}}
+{"event": "siege_contact", "game_seconds": 648.79, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 648.97, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 650.94, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 651.12, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 653.08, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 653.26, "tank_tags": [4375707649]}
+{"event": "score", "game_seconds": 660.04, "spawn": [32.5, 156.5], "workers": 15, "marine": 0, "marauder": 0, "tank": 0, "medivac": 1, "bases": 1, "score": {"score": 5780, "total_value_units": 9675.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 363.0, "collection_rate_vespene": 246.0}}
+{"event": "siege_contact", "game_seconds": 670.4, "tank_tags": []}
+{"event": "score", "game_seconds": 675.04, "spawn": [32.5, 156.5], "workers": 17, "marine": 0, "marauder": 0, "tank": 0, "medivac": 1, "bases": 1, "score": {"score": 5347, "total_value_units": 9725.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 0.0, "collection_rate_vespene": 89.0}}
+{"event": "siege_contact", "game_seconds": 678.62, "tank_tags": [4380164098]}
+{"event": "siege_contact", "game_seconds": 678.97, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 681.47, "tank_tags": [4380164098]}
+{"event": "siege_contact", "game_seconds": 681.65, "tank_tags": [4375707649, 4380164098]}
+{"event": "siege_contact", "game_seconds": 681.83, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 682.01, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 682.37, "tank_tags": []}
+{"event": "score", "game_seconds": 690.04, "spawn": [32.5, 156.5], "workers": 16, "marine": 0, "marauder": 0, "tank": 0, "medivac": 1, "bases": 0, "score": {"score": 4172, "total_value_units": 9725.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 0.0, "collection_rate_vespene": 0.0}}
+{"event": "siege_contact", "game_seconds": 693.08, "tank_tags": [4375707649]}
+{"event": "siege_contact", "game_seconds": 694.69, "tank_tags": [4375707649, 4380164098]}
+{"event": "siege_contact", "game_seconds": 698.26, "tank_tags": [4380164098]}
+{"event": "siege_contact", "game_seconds": 698.97, "tank_tags": []}
+{"event": "siege_contact", "game_seconds": 699.15, "tank_tags": [4380164098]}
+{"event": "siege_contact", "game_seconds": 702.54, "tank_tags": []}
+{"event": "score", "game_seconds": 705.04, "spawn": [32.5, 156.5], "workers": 5, "marine": 0, "marauder": 0, "tank": 0, "medivac": 1, "bases": 0, "score": {"score": 3222, "total_value_units": 9725.0, "total_value_structures": 3600.0, "killed_value_units": 3250.0, "killed_value_structures": 0.0, "collection_rate_minerals": 0.0, "collection_rate_vespene": 0.0}}

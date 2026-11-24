@@ -1,0 +1,88 @@
+{
+  "config": {
+    "purpose": "internal_sol_stability_control",
+    "formal_elo": false,
+    "map": "RedCityLE",
+    "build": 98745,
+    "sc2_path": "<SC2PATH>",
+    "seed": 541124,
+    "wall_limit_seconds": 180,
+    "game_limit_seconds": 480,
+    "deadline_utc": "2026-11-24T06:43:35+00:00",
+    "left": {
+      "path": "<REPO>\\results\\gui\\20261124-sol-gen4-selfplay\\gen5\\bot.py",
+      "revision": "980e4f47f261cc8c3ba2cb1814edd2f19879a458",
+      "generation": 5,
+      "sha256": "789c9043b3ee42e7731298921d50b235d6e49285eeaa667b6594a171f332560c"
+    },
+    "right": {
+      "path": "<REPO>\\results\\gui\\20261124-sol-gen4-selfplay\\gen5\\bot.py",
+      "revision": "980e4f47f261cc8c3ba2cb1814edd2f19879a458",
+      "generation": 5,
+      "sha256": "789c9043b3ee42e7731298921d50b235d6e49285eeaa667b6594a171f332560c"
+    }
+  },
+  "status": "game_time_limit",
+  "results": [
+    "Tie",
+    "Tie"
+  ],
+  "error": null,
+  "scores": {
+    "right": {
+      "event": "score",
+      "game_seconds": 465.04,
+      "spawn": [
+        156.5,
+        143.5
+      ],
+      "workers": 30,
+      "marine": 39,
+      "marauder": 1,
+      "tank": 3,
+      "medivac": 3,
+      "bases": 2,
+      "score": {
+        "score": 10888,
+        "total_value_units": 5300.0,
+        "total_value_structures": 3750.0,
+        "killed_value_units": 2275.0,
+        "killed_value_structures": 1625.0,
+        "collection_rate_minerals": 1539.0,
+        "collection_rate_vespene": 470.0
+      }
+    },
+    "left": {
+      "event": "score",
+      "game_seconds": 465.13,
+      "spawn": [
+        32.5,
+        156.5
+      ],
+      "workers": 36,
+      "marine": 34,
+      "marauder": 0,
+      "tank": 3,
+      "medivac": 2,
+      "bases": 2,
+      "score": {
+        "score": 11171,
+        "total_value_units": 5075.0,
+        "total_value_structures": 3950.0,
+        "killed_value_units": 700.0,
+        "killed_value_structures": 475.0,
+        "collection_rate_minerals": 1707.0,
+        "collection_rate_vespene": 470.0
+      }
+    }
+  },
+  "highest_macro_query_count": {
+    "right": 3,
+    "left": 3
+  },
+  "wall_seconds": 64.89,
+  "replay_files": {
+    "match.SC2Replay": 39060
+  },
+  "owned_clients_remaining": []
+}
